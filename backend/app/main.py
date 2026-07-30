@@ -27,27 +27,17 @@ from fastapi import FastAPI
 from app.api.health import router as health_router
 from app.api.upload import router as upload_router
 from app.database.base import Base
+
+# Import models so SQLAlchemy registers them
+from app.database.models.api_specification import ApiSpecification  # noqa: F401
+from app.database.models.endpoint import Endpoint  # noqa: F401
 from app.database.session import engine
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Application lifecycle events.
-    Runs once when the application starts and once when it shuts down.
-    """
-
-    # Startup
+async def lifespan(application: FastAPI):
     Base.metadata.create_all(bind=engine)
-
     yield
-
-    # Shutdown
-    # Future cleanup tasks will go here.
-    # Example:
-    # - Close Redis connections
-    # - Stop background workers
-    # - Release AI models
 
 
 app = FastAPI(
