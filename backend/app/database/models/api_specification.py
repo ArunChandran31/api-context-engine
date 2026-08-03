@@ -25,9 +25,9 @@ class ApiSpecification(Base):
         nullable=False,
     )
 
-    version: Mapped[str] = mapped_column(
+    version: Mapped[str | None] = mapped_column(
         String(50),
-        nullable=False,
+        nullable=True,
     )
 
     description: Mapped[str | None] = mapped_column(

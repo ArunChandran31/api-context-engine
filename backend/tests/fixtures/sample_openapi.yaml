@@ -1,0 +1,28 @@
+openapi: 3.0.3
+
+info:
+  title: Sample Store API
+  version: 1.0.0
+  description: API used to test the API Context Engine.
+
+paths:
+  /products:
+    get:
+      summary: List products
+      description: Returns all products.
+      operationId: listProducts
+
+    post:
+      summary: Create product
+      description: Creates a new product.
+      operationId: createProduct
+
+  /products/{product_id}:
+    get:
+      summary: Get product
+      description: Returns a product by ID.
+      operationId: getProduct
+
+    delete:
+      summary: Delete product
+      operationId: deleteProduct

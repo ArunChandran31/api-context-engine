@@ -1,0 +1,49 @@
+from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """
+    Application settings loaded from environment variables.
+    """
+
+    app_name: str = Field(default="API Context Engine", alias="APP_NAME")
+    app_version: str = Field(default="0.1.0", alias="APP_VERSION")
+    app_description: str = Field(
+        default="AI-powered platform for understanding and interacting with API specifications",
+        alias="APP_DESCRIPTION",
+    )
+
+    database_url: str = Field(
+        default="sqlite:///./api_context_engine.db",
+        alias="DATABASE_URL",
+    )
+
+    debug: bool = Field(default=True, alias="DEBUG")
+
+    host: str = Field(default="127.0.0.1", alias="HOST")
+    port: int = Field(default=8000, alias="PORT")
+
+    log_level: str = Field(
+        default="INFO",
+        alias="LOG_LEVEL",
+    )
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """
+    Returns a cached Settings instance.
+    """
+    return Settings()
+
+
+settings = get_settings()
