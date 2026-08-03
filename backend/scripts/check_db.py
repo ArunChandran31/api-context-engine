@@ -1,6 +1,5 @@
-from sqlalchemy import inspect
-
 from app.database.session import engine
+from sqlalchemy import inspect
 
 
 def print_separator():
