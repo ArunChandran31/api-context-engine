@@ -1,0 +1,29 @@
+openapi: 3.0.0
+
+info:
+  title: Petstore Test API
+  version: 1.0.0
+  description: Test specification for API Context Engine
+
+paths:
+  /pets:
+    get:
+      summary: List pets
+      description: Returns all pets
+      operationId: listPets
+
+    post:
+      summary: Create pet
+      description: Creates a new pet
+      operationId: createPet
+
+  /pets/{petId}:
+    get:
+      summary: Get pet
+      description: Returns a pet by ID
+      operationId: getPet
+
+    delete:
+      summary: Delete pet
+      description: Deletes a pet
+      operationId: deletePet

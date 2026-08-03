@@ -1,21 +1,64 @@
-from app.parser.models import ApiMetadata, Endpoint
+from typing import Any
+
+from app.parser.models import ParsedEndpoint, ParsedSpecification
+
+HTTP_METHODS = {
+    "get",
+    "post",
+    "put",
+    "patch",
+    "delete",
+    "head",
+    "options",
+    "trace",
+}
 
 
-def extract_metadata(spec: dict) -> ApiMetadata:
-    info = spec.get("info", {})
-    endpoints = []
-    for path, methods in spec.get("paths", {}).items():
-        for method, details in methods.items():
+def extract_specification(
+    specification: dict[str, Any],
+) -> ParsedSpecification:
+    """
+    Extract API metadata and endpoints from a loaded
+    OpenAPI specification.
+    """
+
+    info = specification.get("info", {})
+
+    title = info.get("title", "Untitled API")
+    version = info.get("version")
+    description = info.get("description")
+
+    endpoints: list[ParsedEndpoint] = []
+
+    paths = specification.get("paths", {})
+
+    for path, path_item in paths.items():
+        if not isinstance(path_item, dict):
+            continue
+
+        for method, operation in path_item.items():
+            method_lower = method.lower()
+
+            # Ignore OpenAPI path-level fields such as "parameters".
+            if method_lower not in HTTP_METHODS:
+                continue
+
+            if not isinstance(operation, dict):
+                operation = {}
+
             endpoints.append(
-                Endpoint(
+                ParsedEndpoint(
                     path=path,
-                    method=method.upper(),
-                    summary=details.get("summary"),
+                    method=method_lower.upper(),
+                    summary=operation.get("summary"),
+                    description=operation.get("description"),
+                    operation_id=operation.get("operationId"),
                 )
             )
 
-    return ApiMetadata(
-        title=info.get("title", "Unknown API"),
-        version=info.get("version", "Unknown"),
+    return ParsedSpecification(
+        title=title,
+        version=version,
+        description=description,
         endpoints=endpoints,
     )

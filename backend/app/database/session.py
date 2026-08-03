@@ -1,11 +1,12 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.database.config import DATABASE_URL
+from app.core.config import settings
 
 engine = create_engine(
-    DATABASE_URL,
-    echo=True,      # We'll disable this in production
+    settings.database_url,
+    connect_args={"check_same_thread": False},
+    echo=settings.debug,
 )
 
 SessionLocal = sessionmaker(
@@ -14,7 +15,11 @@ SessionLocal = sessionmaker(
     bind=engine,
 )
 
+
 def get_db():
+    """
+    Database session dependency.
+    """
     db = SessionLocal()
     try:
         yield db

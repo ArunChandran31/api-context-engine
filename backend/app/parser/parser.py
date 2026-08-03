@@ -3,7 +3,7 @@ import json
 import yaml
 
 
-def load_spec(contents: bytes):
+def load_spec(contents: bytes) -> dict:
     """
     Load an OpenAPI specification from JSON or YAML.
     """

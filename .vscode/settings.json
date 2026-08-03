@@ -1,0 +1,27 @@
+{
+    "python.defaultInterpreterPath": "/mnt/c/Users/user/OneDrive/Desktop/Projects/api-context-engine/backend/.venv/bin/python",
+    "python.analysis.extraPaths": [
+        "/mnt/c/Users/user/OneDrive/Desktop/Projects/api-context-engine/backend",
+        "./backend"
+    ],
+
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.autoImportCompletions": true,
+
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports.ruff": "explicit",
+            "source.fixAll.ruff": "explicit"
+        }
+    },
+
+    "ruff.nativeServer": "on",
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/.pytest_cache": true
+    }
+
+    
+}
