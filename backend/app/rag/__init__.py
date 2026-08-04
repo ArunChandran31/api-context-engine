@@ -4,6 +4,10 @@ from app.rag.embeddings import EmbeddingProvider
 from app.rag.in_memory_vector_store import InMemoryVectorStore
 from app.rag.indexing_service import RAGIndexingService
 from app.rag.models import RAGChunk, RAGDocument
+from app.rag.retrieval_service import (
+    RAGRetrievalService,
+    RetrievalResult,
+)
 from app.rag.sentence_transformer_provider import (
     SentenceTransformerEmbeddingProvider,
 )
@@ -21,6 +25,8 @@ __all__ = [
     "RAGChunk",
     "RAGDocument",
     "RAGIndexingService",
+    "RAGRetrievalService",
+    "RetrievalResult",
     "SentenceTransformerEmbeddingProvider",
     "VectorRecord",
     "VectorSearchResult",
