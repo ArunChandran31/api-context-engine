@@ -1,6 +1,7 @@
 from app.rag.chunker import DocumentChunker
 from app.rag.context_generator import ContextGenerator
 from app.rag.embeddings import EmbeddingProvider
+from app.rag.faiss_vector_store import FAISSVectorStore
 from app.rag.in_memory_vector_store import InMemoryVectorStore
 from app.rag.indexing_service import RAGIndexingService
 from app.rag.models import RAGChunk, RAGDocument
@@ -22,6 +23,7 @@ __all__ = [
     "ContextGenerator",
     "DocumentChunker",
     "EmbeddingProvider",
+    "FAISSVectorStore",
     "InMemoryVectorStore",
     "RAGChunk",
     "RAGDocument",
