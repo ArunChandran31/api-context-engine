@@ -1,5 +1,9 @@
 from app.rag.chunker import DocumentChunker
 from app.rag.context_generator import ContextGenerator
+from app.rag.dependencies import (
+    RAGDependencies,
+    build_rag_dependencies,
+)
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.faiss_vector_store import FAISSVectorStore
 from app.rag.in_memory_vector_store import InMemoryVectorStore
@@ -26,6 +30,7 @@ __all__ = [
     "FAISSVectorStore",
     "InMemoryVectorStore",
     "RAGChunk",
+    "RAGDependencies",
     "RAGDocument",
     "RAGIndexingService",
     "RAGPipeline",
@@ -35,4 +40,5 @@ __all__ = [
     "VectorRecord",
     "VectorSearchResult",
     "VectorStore",
+    "build_rag_dependencies",
 ]
