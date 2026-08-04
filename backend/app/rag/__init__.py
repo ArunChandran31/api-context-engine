@@ -5,6 +5,11 @@ from app.rag.models import RAGChunk, RAGDocument
 from app.rag.sentence_transformer_provider import (
     SentenceTransformerEmbeddingProvider,
 )
+from app.rag.vector_store import (
+    VectorRecord,
+    VectorSearchResult,
+    VectorStore,
+)
 
 __all__ = [
     "ContextGenerator",
@@ -13,4 +18,7 @@ __all__ = [
     "RAGChunk",
     "RAGDocument",
     "SentenceTransformerEmbeddingProvider",
+    "VectorRecord",
+    "VectorSearchResult",
+    "VectorStore",
 ]
