@@ -27,6 +27,7 @@ from fastapi import FastAPI
 
 from app.api.endpoints import router as endpoint_router
 from app.api.health import router as health_router
+from app.api.rag import router as rag_router
 from app.api.specifications import router as specification_router
 from app.api.upload import router as upload_router
 from app.core.config import settings
@@ -80,6 +81,11 @@ app.include_router(
 
 app.include_router(
     upload_router,
+    prefix="/api",
+)
+
+app.include_router(
+    rag_router,
     prefix="/api",
 )
 
