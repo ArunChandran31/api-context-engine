@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from app.core.config import Settings, get_settings
 from app.rag.chunker import DocumentChunker
+from app.rag.embeddings import EmbeddingProvider
 from app.rag.faiss_vector_store import FAISSVectorStore
 from app.rag.indexing_service import RAGIndexingService
 from app.rag.pipeline import RAGPipeline
@@ -9,6 +10,7 @@ from app.rag.retrieval_service import RAGRetrievalService
 from app.rag.sentence_transformer_provider import (
     SentenceTransformerEmbeddingProvider,
 )
+from app.rag.vector_store import VectorStore
 
 
 @dataclass(frozen=True)
@@ -17,8 +19,8 @@ class RAGDependencies:
     Container for the application's configured RAG components.
     """
 
-    embedding_provider: SentenceTransformerEmbeddingProvider
-    vector_store: FAISSVectorStore
+    embedding_provider: EmbeddingProvider
+    vector_store: VectorStore
     chunker: DocumentChunker
     indexing_service: RAGIndexingService
     retrieval_service: RAGRetrievalService

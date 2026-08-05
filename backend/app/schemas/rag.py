@@ -26,3 +26,11 @@ class RAGQueryResponse(BaseSchema):
     query: str
 
     results: list[RAGRetrievalResultResponse]
+
+
+class RAGIndexResponse(BaseSchema):
+    specification_id: int
+
+    documents_indexed: int
+
+    chunks_indexed: int

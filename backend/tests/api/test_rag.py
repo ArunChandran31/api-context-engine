@@ -3,9 +3,34 @@ from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 from app.api.rag import get_rag_dependencies
+from app.database.models.api_specification import ApiSpecification
+from app.database.models.endpoint import Endpoint
 from app.main import app
+from app.rag.chunker import DocumentChunker
 from app.rag.dependencies import RAGDependencies
-from app.rag.retrieval_service import RetrievalResult
+from app.rag.embeddings import EmbeddingProvider
+from app.rag.in_memory_vector_store import InMemoryVectorStore
+from app.rag.indexing_service import RAGIndexingService
+from app.rag.pipeline import RAGPipeline
+from app.rag.retrieval_service import RAGRetrievalService, RetrievalResult
+
+
+class KeywordEmbeddingProvider(EmbeddingProvider):
+    @property
+    def dimension(self) -> int:
+        return 3
+
+    def embed(self, text: str) -> list[float]:
+        normalized = text.lower()
+
+        return [
+            float("user" in normalized),
+            float("order" in normalized),
+            float("product" in normalized),
+        ]
+
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed(text) for text in texts]
 
 
 def test_query_rag_returns_retrieved_results() -> None:
@@ -162,3 +187,251 @@ def test_query_rag_returns_empty_results_when_no_context_matches() -> None:
         "query": "Unknown API operation",
         "results": [],
     }
+
+
+def test_index_specification_indexes_generated_documents(
+    monkeypatch,
+) -> None:
+    specification = ApiSpecification(
+        id=1,
+        title="Users API",
+        version="1.0.0",
+        description="User management API",
+        source_file="users.yaml",
+    )
+
+    specification.endpoints = [
+        Endpoint(
+            id=10,
+            api_specification_id=1,
+            path="/users",
+            method="POST",
+            summary="Create user",
+            description="Creates a new user.",
+            operation_id="createUser",
+        ),
+        Endpoint(
+            id=11,
+            api_specification_id=1,
+            path="/users/{id}",
+            method="GET",
+            summary="Get user",
+            description="Returns a user.",
+            operation_id="getUser",
+        ),
+    ]
+
+    indexing_service = MagicMock()
+    indexing_service.index_document.side_effect = [2, 1]
+
+    dependencies = MagicMock(spec=RAGDependencies)
+    dependencies.indexing_service = indexing_service
+
+    monkeypatch.setattr(
+        "app.api.rag.specification_service.get",
+        lambda db, specification_id: specification,
+    )
+
+    app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+
+    try:
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/rag/index/1",
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+
+    assert response.json() == {
+        "specification_id": 1,
+        "documents_indexed": 2,
+        "chunks_indexed": 3,
+    }
+
+    assert indexing_service.index_document.call_count == 2
+
+
+def test_index_specification_returns_404_when_specification_missing(
+    monkeypatch,
+) -> None:
+    dependencies = MagicMock(spec=RAGDependencies)
+
+    monkeypatch.setattr(
+        "app.api.rag.specification_service.get",
+        lambda db, specification_id: None,
+    )
+
+    app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+
+    try:
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/rag/index/999",
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+
+    assert response.json() == {
+        "detail": "API specification with ID 999 was not found.",
+    }
+
+
+def test_index_specification_handles_specification_without_endpoints(
+    monkeypatch,
+) -> None:
+    specification = ApiSpecification(
+        id=1,
+        title="Empty API",
+        version="1.0.0",
+        description=None,
+        source_file="empty.yaml",
+    )
+
+    specification.endpoints = []
+
+    indexing_service = MagicMock()
+
+    dependencies = MagicMock(spec=RAGDependencies)
+    dependencies.indexing_service = indexing_service
+
+    monkeypatch.setattr(
+        "app.api.rag.specification_service.get",
+        lambda db, specification_id: specification,
+    )
+
+    app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+
+    try:
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/rag/index/1",
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+
+    assert response.json() == {
+        "specification_id": 1,
+        "documents_indexed": 0,
+        "chunks_indexed": 0,
+    }
+
+    indexing_service.index_document.assert_not_called()
+
+
+def test_indexed_specification_can_be_queried_through_shared_vector_store(
+    monkeypatch,
+) -> None:
+    specification = ApiSpecification(
+        id=1,
+        title="Users API",
+        version="1.0.0",
+        description="User management API",
+        source_file="users.yaml",
+    )
+
+    specification.endpoints = [
+        Endpoint(
+            id=10,
+            api_specification_id=1,
+            path="/users",
+            method="POST",
+            summary="Create user",
+            description="Creates a new user account.",
+            operation_id="createUser",
+        ),
+        Endpoint(
+            id=11,
+            api_specification_id=1,
+            path="/orders",
+            method="GET",
+            summary="List orders",
+            description="Returns customer orders.",
+            operation_id="listOrders",
+        ),
+    ]
+
+    embedding_provider = KeywordEmbeddingProvider()
+
+    vector_store = InMemoryVectorStore(
+        dimension=embedding_provider.dimension,
+    )
+
+    indexing_service = RAGIndexingService(
+        embedding_provider=embedding_provider,
+        vector_store=vector_store,
+        chunker=DocumentChunker(),
+    )
+
+    retrieval_service = RAGRetrievalService(
+        embedding_provider=embedding_provider,
+        vector_store=vector_store,
+    )
+
+    chunker = DocumentChunker()
+
+    pipeline = RAGPipeline(
+        indexing_service=indexing_service,
+        retrieval_service=retrieval_service,
+    )
+
+    dependencies = RAGDependencies(
+        embedding_provider=embedding_provider,
+        vector_store=vector_store,
+        chunker=chunker,
+        indexing_service=indexing_service,
+        retrieval_service=retrieval_service,
+        pipeline=pipeline,
+        retrieval_limit=5,
+    )
+
+    monkeypatch.setattr(
+        "app.api.rag.specification_service.get",
+        lambda db, specification_id: specification,
+    )
+
+    app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+
+    try:
+        client = TestClient(app)
+
+        index_response = client.post(
+            "/api/rag/index/1",
+        )
+
+        query_response = client.post(
+            "/api/rag/query",
+            json={
+                "query": "How do I create a user?",
+                "limit": 1,
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert index_response.status_code == 200
+
+    assert index_response.json()["specification_id"] == 1
+    assert index_response.json()["documents_indexed"] == 2
+    assert index_response.json()["chunks_indexed"] > 0
+
+    assert query_response.status_code == 200
+
+    response_body = query_response.json()
+
+    assert response_body["query"] == "How do I create a user?"
+    assert len(response_body["results"]) == 1
+
+    result = response_body["results"][0]
+
+    assert result["metadata"]["path"] == "/users"
+    assert result["metadata"]["method"] == "POST"
+    assert "user" in result["content"].lower()
