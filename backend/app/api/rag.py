@@ -59,6 +59,8 @@ def index_specification(
         dependencies.indexing_service.index_document(document) for document in documents
     )
 
+    dependencies.persistence.save()
+
     return RAGIndexResponse(
         specification_id=specification_id,
         documents_indexed=len(documents),

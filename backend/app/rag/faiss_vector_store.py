@@ -5,6 +5,7 @@ from typing import Any
 import faiss
 import numpy as np
 
+from app.rag.persistence import VectorStorePersistence
 from app.rag.vector_store import (
     VectorRecord,
     VectorSearchResult,
@@ -12,7 +13,7 @@ from app.rag.vector_store import (
 )
 
 
-class FAISSVectorStore(VectorStore):
+class FAISSVectorStore(VectorStore, VectorStorePersistence):
     """
     FAISS-backed vector store using cosine similarity.
 

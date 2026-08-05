@@ -10,6 +10,7 @@ from app.rag.pipeline import RAGPipeline
 from app.rag.sentence_transformer_provider import (
     SentenceTransformerEmbeddingProvider,
 )
+from app.rag.vector_store import VectorRecord
 
 
 def create_settings(
@@ -118,3 +119,53 @@ def test_indexing_and_retrieval_share_vector_store(
     assert dependencies.indexing_service._vector_store is dependencies.vector_store
 
     assert dependencies.retrieval_service._vector_store is dependencies.vector_store
+
+
+def test_build_loads_existing_persisted_vector_store(
+    tmp_path: Path,
+) -> None:
+    settings = create_settings(tmp_path)
+
+    initial_store = FAISSVectorStore(
+        dimension=384,
+        storage_path=tmp_path,
+    )
+
+    initial_store.add(
+        VectorRecord(
+            id="persisted-record",
+            vector=[1.0] + [0.0] * 383,
+            content="Persisted API context",
+            metadata={
+                "path": "/users",
+                "method": "GET",
+            },
+        )
+    )
+
+    initial_store.save()
+
+    dependencies = build_rag_dependencies(settings)
+
+    assert len(dependencies.vector_store) == 1
+
+    results = dependencies.vector_store.search(
+        [1.0] + [0.0] * 383,
+        limit=1,
+    )
+
+    assert results[0].record.id == "persisted-record"
+    assert results[0].record.content == "Persisted API context"
+
+
+def test_build_creates_new_vector_store_when_persistence_is_missing(
+    tmp_path: Path,
+) -> None:
+    dependencies = build_rag_dependencies(create_settings(tmp_path))
+
+    assert isinstance(
+        dependencies.vector_store,
+        FAISSVectorStore,
+    )
+
+    assert len(dependencies.vector_store) == 0

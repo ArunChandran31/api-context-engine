@@ -11,6 +11,7 @@ from app.rag.dependencies import RAGDependencies
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.in_memory_vector_store import InMemoryVectorStore
 from app.rag.indexing_service import RAGIndexingService
+from app.rag.persistence import VectorStorePersistence
 from app.rag.pipeline import RAGPipeline
 from app.rag.retrieval_service import RAGRetrievalService, RetrievalResult
 
@@ -31,6 +32,14 @@ class KeywordEmbeddingProvider(EmbeddingProvider):
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         return [self.embed(text) for text in texts]
+
+
+class FakeVectorStorePersistence(VectorStorePersistence):
+    def __init__(self) -> None:
+        self.save_count = 0
+
+    def save(self) -> None:
+        self.save_count += 1
 
 
 def test_query_rag_returns_retrieved_results() -> None:
@@ -224,8 +233,11 @@ def test_index_specification_indexes_generated_documents(
     indexing_service = MagicMock()
     indexing_service.index_document.side_effect = [2, 1]
 
+    persistence = MagicMock()
+
     dependencies = MagicMock(spec=RAGDependencies)
     dependencies.indexing_service = indexing_service
+    dependencies.persistence = persistence
 
     monkeypatch.setattr(
         "app.api.rag.specification_service.get",
@@ -252,6 +264,7 @@ def test_index_specification_indexes_generated_documents(
     }
 
     assert indexing_service.index_document.call_count == 2
+    persistence.save.assert_called_once_with()
 
 
 def test_index_specification_returns_404_when_specification_missing(
@@ -296,9 +309,11 @@ def test_index_specification_handles_specification_without_endpoints(
     specification.endpoints = []
 
     indexing_service = MagicMock()
+    persistence = MagicMock()
 
     dependencies = MagicMock(spec=RAGDependencies)
     dependencies.indexing_service = indexing_service
+    dependencies.persistence = persistence
 
     monkeypatch.setattr(
         "app.api.rag.specification_service.get",
@@ -325,6 +340,7 @@ def test_index_specification_handles_specification_without_endpoints(
     }
 
     indexing_service.index_document.assert_not_called()
+    persistence.save.assert_called_once_with()
 
 
 def test_indexed_specification_can_be_queried_through_shared_vector_store(
@@ -365,10 +381,12 @@ def test_indexed_specification_can_be_queried_through_shared_vector_store(
         dimension=embedding_provider.dimension,
     )
 
+    chunker = DocumentChunker()
+
     indexing_service = RAGIndexingService(
         embedding_provider=embedding_provider,
         vector_store=vector_store,
-        chunker=DocumentChunker(),
+        chunker=chunker,
     )
 
     retrieval_service = RAGRetrievalService(
@@ -376,7 +394,7 @@ def test_indexed_specification_can_be_queried_through_shared_vector_store(
         vector_store=vector_store,
     )
 
-    chunker = DocumentChunker()
+    persistence = FakeVectorStorePersistence()
 
     pipeline = RAGPipeline(
         indexing_service=indexing_service,
@@ -386,6 +404,7 @@ def test_indexed_specification_can_be_queried_through_shared_vector_store(
     dependencies = RAGDependencies(
         embedding_provider=embedding_provider,
         vector_store=vector_store,
+        persistence=persistence,
         chunker=chunker,
         indexing_service=indexing_service,
         retrieval_service=retrieval_service,
@@ -422,6 +441,7 @@ def test_indexed_specification_can_be_queried_through_shared_vector_store(
     assert index_response.json()["specification_id"] == 1
     assert index_response.json()["documents_indexed"] == 2
     assert index_response.json()["chunks_indexed"] > 0
+    assert persistence.save_count == 1
 
     assert query_response.status_code == 200
 
@@ -435,3 +455,82 @@ def test_indexed_specification_can_be_queried_through_shared_vector_store(
     assert result["metadata"]["path"] == "/users"
     assert result["metadata"]["method"] == "POST"
     assert "user" in result["content"].lower()
+
+
+def test_index_specification_persists_after_success(
+    monkeypatch,
+) -> None:
+    specification = MagicMock()
+    specification.id = 1
+    specification.title = "Test API"
+    specification.version = "1.0"
+    specification.description = "Test API description"
+    specification.endpoints = []
+
+    indexing_service = MagicMock()
+    persistence = MagicMock(spec=VectorStorePersistence)
+
+    dependencies = MagicMock(spec=RAGDependencies)
+    dependencies.indexing_service = indexing_service
+    dependencies.persistence = persistence
+
+    monkeypatch.setattr(
+        "app.api.rag.specification_service.get",
+        lambda db, specification_id: specification,
+    )
+
+    app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+
+    try:
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/rag/index/1",
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    persistence.save.assert_called_once_with()
+
+
+def test_index_specification_propagates_persistence_failure(
+    monkeypatch,
+) -> None:
+    specification = MagicMock()
+    specification.id = 1
+    specification.title = "Test API"
+    specification.version = "1.0"
+    specification.description = "Test API description"
+    specification.endpoints = []
+
+    indexing_service = MagicMock()
+
+    persistence = MagicMock(spec=VectorStorePersistence)
+    persistence.save.side_effect = OSError("Unable to persist vector store.")
+
+    dependencies = MagicMock(spec=RAGDependencies)
+    dependencies.indexing_service = indexing_service
+    dependencies.persistence = persistence
+
+    monkeypatch.setattr(
+        "app.api.rag.specification_service.get",
+        lambda db, specification_id: specification,
+    )
+
+    app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+
+    try:
+        client = TestClient(
+            app,
+            raise_server_exceptions=False,
+        )
+
+        response = client.post(
+            "/api/rag/index/1",
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    persistence.save.assert_called_once_with()

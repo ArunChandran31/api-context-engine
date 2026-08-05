@@ -1,10 +1,12 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 from app.core.config import Settings, get_settings
 from app.rag.chunker import DocumentChunker
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.faiss_vector_store import FAISSVectorStore
 from app.rag.indexing_service import RAGIndexingService
+from app.rag.persistence import VectorStorePersistence
 from app.rag.pipeline import RAGPipeline
 from app.rag.retrieval_service import RAGRetrievalService
 from app.rag.sentence_transformer_provider import (
@@ -15,12 +17,9 @@ from app.rag.vector_store import VectorStore
 
 @dataclass(frozen=True)
 class RAGDependencies:
-    """
-    Container for the application's configured RAG components.
-    """
-
     embedding_provider: EmbeddingProvider
     vector_store: VectorStore
+    persistence: VectorStorePersistence
     chunker: DocumentChunker
     indexing_service: RAGIndexingService
     retrieval_service: RAGRetrievalService
@@ -44,10 +43,24 @@ def build_rag_dependencies(
         model_name=application_settings.rag_embedding_model,
     )
 
-    vector_store = FAISSVectorStore(
-        dimension=embedding_provider.dimension,
-        storage_path=application_settings.rag_vector_store_path,
-    )
+    storage_path = Path(application_settings.rag_vector_store_path)
+
+    index_path = storage_path / FAISSVectorStore.INDEX_FILENAME
+    records_path = storage_path / FAISSVectorStore.RECORDS_FILENAME
+
+    if index_path.exists() and records_path.exists():
+        vector_store = FAISSVectorStore.load(storage_path)
+
+        if vector_store.dimension != embedding_provider.dimension:
+            raise ValueError(
+                "Persisted FAISS vector store dimension does not "
+                "match embedding provider dimension."
+            )
+    else:
+        vector_store = FAISSVectorStore(
+            dimension=embedding_provider.dimension,
+            storage_path=storage_path,
+        )
 
     chunker = DocumentChunker(
         max_chunk_size=application_settings.rag_chunk_size,
@@ -72,6 +85,7 @@ def build_rag_dependencies(
     return RAGDependencies(
         embedding_provider=embedding_provider,
         vector_store=vector_store,
+        persistence=vector_store,
         chunker=chunker,
         indexing_service=indexing_service,
         retrieval_service=retrieval_service,
