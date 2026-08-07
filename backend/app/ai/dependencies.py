@@ -1,23 +1,46 @@
 from dataclasses import dataclass
 
 from app.ai.deterministic_provider import DeterministicLLMProvider
+from app.ai.deterministic_test_case_generator import (
+    DeterministicTestCaseGenerator,
+)
 from app.ai.groq_provider import GroqLLMProvider
 from app.ai.prompt_builder import GroundedPromptBuilder
 from app.ai.provider import LLMProvider
-from app.ai.question_answering_service import QuestionAnsweringService
+from app.ai.question_answering_service import (
+    QuestionAnsweringService,
+)
+from app.ai.test_case_generation_service import (
+    TestCaseGenerationService,
+)
+from app.ai.test_case_generator import TestCaseGenerator
+from app.ai.test_case_models import (
+    GeneratedTestCase,
+    TestCaseGenerationResult,
+)
+from app.ai.test_case_prompt_builder import (
+    TestCasePromptBuilder,
+)
 from app.core.config import Settings, get_settings
-from app.rag.dependencies import RAGDependencies, build_rag_dependencies
+from app.rag.dependencies import (
+    RAGDependencies,
+    build_rag_dependencies,
+)
 
 
 @dataclass(frozen=True)
 class AIDependencies:
     """
-    Application-level dependencies for AI question answering.
+    Application-level AI dependency graph.
     """
 
     llm_provider: LLMProvider
+
     prompt_builder: GroundedPromptBuilder
     question_answering_service: QuestionAnsweringService
+
+    test_case_prompt_builder: TestCasePromptBuilder
+    test_case_generation_service: TestCaseGenerationService
 
 
 def build_ai_dependencies(
@@ -68,8 +91,33 @@ def build_ai_dependencies(
         retrieval_limit=application_settings.rag_retrieval_limit,
     )
 
+    test_case_prompt_builder = TestCasePromptBuilder()
+
+    test_case_generator: TestCaseGenerator = DeterministicTestCaseGenerator(
+        result=TestCaseGenerationResult(
+            test_cases=[
+                GeneratedTestCase(
+                    category="Positive",
+                    description=(
+                        "The deterministic test case generator "
+                        "is configured correctly."
+                    ),
+                )
+            ]
+        )
+    )
+
+    test_case_generation_service = TestCaseGenerationService(
+        retrieval_service=rag.retrieval_service,
+        prompt_builder=test_case_prompt_builder,
+        generator=test_case_generator,
+        retrieval_limit=application_settings.rag_retrieval_limit,
+    )
+
     return AIDependencies(
         llm_provider=llm_provider,
         prompt_builder=prompt_builder,
         question_answering_service=question_answering_service,
+        test_case_prompt_builder=test_case_prompt_builder,
+        test_case_generation_service=test_case_generation_service,
     )

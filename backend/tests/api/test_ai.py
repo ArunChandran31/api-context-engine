@@ -19,6 +19,8 @@ def test_question_endpoint_returns_answer() -> None:
         llm_provider=MagicMock(),
         prompt_builder=MagicMock(),
         question_answering_service=qa_service,
+        test_case_prompt_builder=MagicMock(),
+        test_case_generation_service=MagicMock(),
     )
 
     app.dependency_overrides[get_ai_dependencies] = lambda: dependencies
