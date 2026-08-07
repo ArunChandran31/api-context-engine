@@ -1,8 +1,8 @@
 {
-    "python.defaultInterpreterPath": "/mnt/c/Users/user/OneDrive/Desktop/Projects/api-context-engine/backend/.venv/bin/python",
+    "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
+
     "python.analysis.extraPaths": [
-        "/mnt/c/Users/user/OneDrive/Desktop/Projects/api-context-engine/backend",
-        "./backend"
+        "${workspaceFolder}/backend"
     ],
 
     "python.analysis.typeCheckingMode": "basic",
@@ -18,10 +18,9 @@
     },
 
     "ruff.nativeServer": "on",
+
     "files.exclude": {
         "**/__pycache__": true,
         "**/.pytest_cache": true
     }
-
-    
 }

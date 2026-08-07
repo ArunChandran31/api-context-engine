@@ -25,10 +25,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.ai import router as ai_router
+from app.api.debug import router as debug_router
 from app.api.endpoints import router as endpoint_router
 from app.api.health import router as health_router
 from app.api.rag import router as rag_router
 from app.api.specifications import router as specification_router
+from app.api.test_cases import router as test_case_router
 from app.api.upload import router as upload_router
 from app.core.config import settings
 from app.core.logging import configure_logging
@@ -81,6 +84,21 @@ app.include_router(
 
 app.include_router(
     upload_router,
+    prefix="/api",
+)
+
+app.include_router(
+    ai_router,
+    prefix="/api",
+)
+
+app.include_router(
+    debug_router,
+    prefix="/api",
+)
+
+app.include_router(
+    test_case_router,
     prefix="/api",
 )
 
