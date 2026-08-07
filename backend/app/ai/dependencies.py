@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from app.ai.deterministic_provider import DeterministicLLMProvider
+from app.ai.groq_provider import GroqLLMProvider
 from app.ai.prompt_builder import GroundedPromptBuilder
 from app.ai.provider import LLMProvider
 from app.ai.question_answering_service import QuestionAnsweringService
@@ -36,12 +37,27 @@ def build_ai_dependencies(
         settings=application_settings,
     )
 
-    llm_provider = DeterministicLLMProvider(
-        response=(
-            "The deterministic AI provider is configured correctly. "
-            "A production LLM provider has not been configured yet."
-        ),
-    )
+    if application_settings.llm_provider == "deterministic":
+        llm_provider: LLMProvider = DeterministicLLMProvider(
+            response=(
+                "The deterministic AI provider is configured correctly. "
+                "A production LLM provider has not been configured yet."
+            ),
+        )
+
+    elif application_settings.llm_provider == "groq":
+        if not application_settings.groq_api_key:
+            raise ValueError("GROQ_API_KEY is required when LLM_PROVIDER is 'groq'.")
+
+        llm_provider = GroqLLMProvider(
+            api_key=application_settings.groq_api_key,
+            model=application_settings.groq_model,
+        )
+
+    else:
+        raise ValueError(
+            f"Unsupported LLM provider: {application_settings.llm_provider}"
+        )
 
     prompt_builder = GroundedPromptBuilder()
 

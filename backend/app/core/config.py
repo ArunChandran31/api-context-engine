@@ -74,6 +74,21 @@ class Settings(BaseSettings):
         alias="RAG_RETRIEVAL_LIMIT",
     )
 
+    llm_provider: str = Field(
+        default="deterministic",
+        alias="LLM_PROVIDER",
+    )
+
+    groq_api_key: str | None = Field(
+        default=None,
+        alias="GROQ_API_KEY",
+    )
+
+    groq_model: str = Field(
+        default="openai/gpt-oss-20b",
+        alias="GROQ_MODEL",
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
