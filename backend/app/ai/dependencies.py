@@ -1,5 +1,11 @@
 from dataclasses import dataclass
 
+from app.ai.debug_generator import DebugGenerator
+from app.ai.debug_prompt_builder import DebugPromptBuilder
+from app.ai.debug_service import DebugService
+from app.ai.deterministic_debug_generator import (
+    DeterministicDebugGenerator,
+)
 from app.ai.deterministic_provider import DeterministicLLMProvider
 from app.ai.deterministic_test_case_generator import (
     DeterministicTestCaseGenerator,
@@ -41,6 +47,10 @@ class AIDependencies:
 
     test_case_prompt_builder: TestCasePromptBuilder
     test_case_generation_service: TestCaseGenerationService
+
+    debug_prompt_builder: DebugPromptBuilder
+    debug_generator: DebugGenerator
+    debug_service: DebugService
 
 
 def build_ai_dependencies(
@@ -114,10 +124,26 @@ def build_ai_dependencies(
         retrieval_limit=application_settings.rag_retrieval_limit,
     )
 
+    debug_prompt_builder = DebugPromptBuilder()
+
+    debug_generator = DeterministicDebugGenerator(
+        explanation=("The deterministic debug generator is configured correctly."),
+    )
+
+    debug_service = DebugService(
+        retrieval_service=rag.retrieval_service,
+        prompt_builder=debug_prompt_builder,
+        debug_generator=debug_generator,
+        retrieval_limit=application_settings.rag_retrieval_limit,
+    )
+
     return AIDependencies(
         llm_provider=llm_provider,
         prompt_builder=prompt_builder,
         question_answering_service=question_answering_service,
         test_case_prompt_builder=test_case_prompt_builder,
         test_case_generation_service=test_case_generation_service,
+        debug_prompt_builder=debug_prompt_builder,
+        debug_generator=debug_generator,
+        debug_service=debug_service,
     )
