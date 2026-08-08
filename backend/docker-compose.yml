@@ -11,11 +11,17 @@ services:
       HOST: "0.0.0.0"
       PORT: "8000"
       DATABASE_URL: "sqlite:////app/data/db/api_context_engine.db"
+      REDIS_URL: "redis://redis:6379/0"
       RAG_VECTOR_STORE_PATH: "/app/data/faiss"
       LLM_PROVIDER: "deterministic"
     volumes:
       - api_context_engine_db:/app/data/db
       - api_context_engine_faiss:/app/data/faiss
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: api-context-engine-redis
     restart: unless-stopped
 
 volumes:
