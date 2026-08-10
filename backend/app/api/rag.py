@@ -19,6 +19,7 @@ from app.schemas.rag import (
     RAGRetrievalResultResponse,
 )
 from app.services.api_specification_service import ApiSpecificationService
+from app.utils.timing import Timer
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,9 @@ def query_rag(
         Depends(get_cache_service),
     ],
 ) -> RAGQueryResponse:
+    total_timer = Timer()
+    total_timer.start()
+
     limit = request.limit if request.limit is not None else dependencies.retrieval_limit
 
     cache_key = build_rag_query_cache_key(
@@ -97,36 +101,49 @@ def query_rag(
         limit=limit,
     )
 
+    cache_get_timer = Timer()
+    cache_get_timer.start()
     cached_results = cache.get(cache_key)
+    cache_get_ms = cache_get_timer.stop()
 
     if cached_results is not None:
-        logger.info(
-            "RAG cache HIT",
-            extra={
-                "cache_key": cache_key,
-                "query": request.query,
-                "limit": limit,
-            },
-        )
-
-        return RAGQueryResponse(
+        response = RAGQueryResponse(
             query=request.query,
             results=[RAGRetrievalResultResponse(**result) for result in cached_results],
         )
+
+        total_ms = total_timer.stop()
+
+        logger.info(
+            "RAG query completed",
+            extra={
+                "cache_hit": True,
+                "cache_get_ms": round(cache_get_ms, 2),
+                "retrieval_ms": 0.0,
+                "cache_set_ms": 0.0,
+                "total_ms": round(total_ms, 2),
+                "result_count": len(response.results),
+            },
+        )
+
+        return response
 
     logger.info(
         "RAG cache MISS",
         extra={
             "cache_key": cache_key,
-            "query": request.query,
-            "limit": limit,
         },
     )
+
+    retrieval_timer = Timer()
+    retrieval_timer.start()
 
     results = dependencies.retrieval_service.retrieve(
         query=request.query,
         limit=limit,
     )
+
+    retrieval_ms = retrieval_timer.stop()
 
     response_results = [
         RAGRetrievalResultResponse(
@@ -137,10 +154,28 @@ def query_rag(
         for result in results
     ]
 
+    cache_set_timer = Timer()
+    cache_set_timer.start()
+
     cache.set(
         cache_key,
         [result.model_dump() for result in response_results],
         ttl_seconds=settings.redis_cache_ttl_seconds,
+    )
+
+    cache_set_ms = cache_set_timer.stop()
+    total_ms = total_timer.stop()
+
+    logger.info(
+        "RAG query completed",
+        extra={
+            "cache_hit": False,
+            "cache_get_ms": round(cache_get_ms, 2),
+            "retrieval_ms": round(retrieval_ms, 2),
+            "cache_set_ms": round(cache_set_ms, 2),
+            "total_ms": round(total_ms, 2),
+            "result_count": len(response_results),
+        },
     )
 
     return RAGQueryResponse(
