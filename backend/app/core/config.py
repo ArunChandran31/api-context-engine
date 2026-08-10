@@ -37,6 +37,12 @@ class Settings(BaseSettings):
         alias="REDIS_URL",
     )
 
+    redis_cache_ttl_seconds: int = Field(
+        default=300,
+        gt=0,
+        alias="REDIS_CACHE_TTL_SECONDS",
+    )
+
     debug: bool = Field(
         default=True,
         alias="DEBUG",

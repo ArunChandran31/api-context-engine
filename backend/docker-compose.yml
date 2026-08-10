@@ -12,6 +12,7 @@ services:
       PORT: "8000"
       DATABASE_URL: "sqlite:////app/data/db/api_context_engine.db"
       REDIS_URL: "redis://redis:6379/0"
+      REDIS_CACHE_TTL_SECONDS: "300"
       RAG_VECTOR_STORE_PATH: "/app/data/faiss"
       LLM_PROVIDER: "deterministic"
     volumes:

@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 from app.api.rag import get_rag_dependencies
+from app.cache.dependencies import get_cache_service
 from app.database.models.api_specification import ApiSpecification
 from app.database.models.endpoint import Endpoint
 from app.main import app
@@ -42,6 +43,29 @@ class FakeVectorStorePersistence(VectorStorePersistence):
         self.save_count += 1
 
 
+class FakeCacheService:
+    def __init__(self) -> None:
+        self._values: dict[str, object] = {}
+        self.set_calls: list[tuple[str, object, int]] = []
+
+    def get(self, key: str):
+        return self._values.get(key)
+
+    def set(
+        self,
+        key: str,
+        value: object,
+        ttl_seconds: int,
+    ) -> None:
+        self._values[key] = value
+        self.set_calls.append(
+            (key, value, ttl_seconds),
+        )
+
+    def delete(self, key: str) -> bool:
+        return self._values.pop(key, None) is not None
+
+
 def test_query_rag_returns_retrieved_results() -> None:
     retrieval_service = MagicMock()
 
@@ -60,7 +84,10 @@ def test_query_rag_returns_retrieved_results() -> None:
     dependencies.retrieval_service = retrieval_service
     dependencies.retrieval_limit = 5
 
+    cache = FakeCacheService()
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_cache_service] = lambda: cache
 
     try:
         client = TestClient(app)
@@ -97,6 +124,53 @@ def test_query_rag_returns_retrieved_results() -> None:
     )
 
 
+def test_query_rag_returns_cached_results_without_retrieval() -> None:
+    retrieval_service = MagicMock()
+
+    cached_results = [
+        {
+            "content": "Endpoint: POST /users",
+            "score": 0.95,
+            "metadata": {
+                "path": "/users",
+                "method": "POST",
+            },
+        }
+    ]
+
+    cache = MagicMock()
+    cache.get.return_value = cached_results
+
+    dependencies = MagicMock(spec=RAGDependencies)
+    dependencies.retrieval_service = retrieval_service
+    dependencies.retrieval_limit = 5
+
+    app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_cache_service] = lambda: cache
+
+    try:
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/rag/query",
+            json={
+                "query": "How do I create a user?",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+
+    assert response.json() == {
+        "query": "How do I create a user?",
+        "results": cached_results,
+    }
+
+    retrieval_service.retrieve.assert_not_called()
+    cache.get.assert_called_once()
+
+
 def test_query_rag_uses_configured_default_limit() -> None:
     retrieval_service = MagicMock()
     retrieval_service.retrieve.return_value = []
@@ -105,7 +179,10 @@ def test_query_rag_uses_configured_default_limit() -> None:
     dependencies.retrieval_service = retrieval_service
     dependencies.retrieval_limit = 7
 
+    cache = FakeCacheService()
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_cache_service] = lambda: cache
 
     try:
         client = TestClient(app)
@@ -130,7 +207,10 @@ def test_query_rag_uses_configured_default_limit() -> None:
 def test_query_rag_rejects_empty_query() -> None:
     dependencies = MagicMock(spec=RAGDependencies)
 
+    cache = FakeCacheService()
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_cache_service] = lambda: cache
 
     try:
         client = TestClient(app)
@@ -150,7 +230,10 @@ def test_query_rag_rejects_empty_query() -> None:
 def test_query_rag_rejects_invalid_limit() -> None:
     dependencies = MagicMock(spec=RAGDependencies)
 
+    cache = FakeCacheService()
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_cache_service] = lambda: cache
 
     try:
         client = TestClient(app)
@@ -176,7 +259,10 @@ def test_query_rag_returns_empty_results_when_no_context_matches() -> None:
     dependencies.retrieval_service = retrieval_service
     dependencies.retrieval_limit = 5
 
+    cache = FakeCacheService()
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_cache_service] = lambda: cache
 
     try:
         client = TestClient(app)
@@ -244,7 +330,10 @@ def test_index_specification_indexes_generated_documents(
         lambda db, specification_id: specification,
     )
 
+    cache = FakeCacheService()
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_cache_service] = lambda: cache
 
     try:
         client = TestClient(app)
@@ -277,7 +366,10 @@ def test_index_specification_returns_404_when_specification_missing(
         lambda db, specification_id: None,
     )
 
+    cache = FakeCacheService()
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_cache_service] = lambda: cache
 
     try:
         client = TestClient(app)
@@ -320,7 +412,10 @@ def test_index_specification_handles_specification_without_endpoints(
         lambda db, specification_id: specification,
     )
 
+    cache = FakeCacheService()
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_cache_service] = lambda: cache
 
     try:
         client = TestClient(app)
@@ -417,7 +512,10 @@ def test_indexed_specification_can_be_queried_through_shared_vector_store(
         lambda db, specification_id: specification,
     )
 
+    cache = FakeCacheService()
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_cache_service] = lambda: cache
 
     try:
         client = TestClient(app)
@@ -479,7 +577,10 @@ def test_index_specification_persists_after_success(
         lambda db, specification_id: specification,
     )
 
+    cache = FakeCacheService()
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_cache_service] = lambda: cache
 
     try:
         client = TestClient(app)
@@ -518,7 +619,10 @@ def test_index_specification_propagates_persistence_failure(
         lambda db, specification_id: specification,
     )
 
+    cache = FakeCacheService()
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_cache_service] = lambda: cache
 
     try:
         client = TestClient(
