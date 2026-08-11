@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class TestCaseGenerationRequest:
+    __test__ = False
     prompt: str
 
     def __post_init__(self) -> None:
@@ -25,6 +26,7 @@ class GeneratedTestCase:
 
 @dataclass(frozen=True)
 class TestCaseGenerationResult:
+    __test__ = False
     test_cases: list[GeneratedTestCase]
 
     def __post_init__(self) -> None:

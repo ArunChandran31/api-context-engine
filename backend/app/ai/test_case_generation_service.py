@@ -5,6 +5,7 @@ from app.rag.retrieval_service import RAGRetrievalService
 
 
 class TestCaseGenerationService:
+    __test__ = False
     """
     Coordinates retrieval-grounded AI test case generation.
 
