@@ -1,7 +1,20 @@
 import json
-from typing import Any
+import logging
+from typing import Any, Protocol
 
-from redis import Redis
+from redis.exceptions import RedisError
+
+logger = logging.getLogger(__name__)
+
+
+class CacheClient(Protocol):
+    """Interface required by CacheService."""
+
+    def get(self, key: str) -> Any: ...
+
+    def set(self, key: str, value: str, ex: int) -> Any: ...
+
+    def delete(self, key: str) -> int: ...
 
 
 class CacheService:
@@ -9,21 +22,38 @@ class CacheService:
     Application-level cache service backed by Redis.
     """
 
-    def __init__(self, client: Redis) -> None:
+    def __init__(self, client: CacheClient) -> None:
         self._client = client
 
     def get(self, key: str) -> Any | None:
         """
         Retrieve a cached value.
 
-        Returns None when the key does not exist.
+        Returns None when the key does not exist, Redis is unavailable,
+        or the cached value is invalid JSON.
         """
-        value = self._client.get(key)
+        try:
+            value = self._client.get(key)
+        except RedisError as exc:
+            logger.warning(
+                "Redis cache GET failed",
+                extra={"cache_key": key},
+                exc_info=exc,
+            )
+            return None
 
         if value is None:
             return None
 
-        return json.loads(value)
+        try:
+            return json.loads(value)
+        except (TypeError, json.JSONDecodeError) as exc:
+            logger.warning(
+                "Redis cache value is invalid JSON",
+                extra={"cache_key": key},
+                exc_info=exc,
+            )
+            return None
 
     def set(
         self,
@@ -33,20 +63,39 @@ class CacheService:
     ) -> None:
         """
         Store a value in Redis with a TTL.
+
+        Redis failures are treated as cache failures and do not
+        propagate to the caller.
         """
         if ttl_seconds <= 0:
             raise ValueError("TTL must be greater than zero.")
 
-        self._client.set(
-            key,
-            json.dumps(value),
-            ex=ttl_seconds,
-        )
+        try:
+            self._client.set(
+                key,
+                json.dumps(value),
+                ex=ttl_seconds,
+            )
+        except RedisError as exc:
+            logger.warning(
+                "Redis cache SET failed",
+                extra={"cache_key": key},
+                exc_info=exc,
+            )
 
     def delete(self, key: str) -> bool:
         """
         Delete a cached value.
 
-        Returns True when a value was deleted.
+        Returns True when a value was deleted and False when the
+        key does not exist or Redis is unavailable.
         """
-        return bool(self._client.delete(key))
+        try:
+            return bool(self._client.delete(key))
+        except RedisError as exc:
+            logger.warning(
+                "Redis cache DELETE failed",
+                extra={"cache_key": key},
+                exc_info=exc,
+            )
+            return False

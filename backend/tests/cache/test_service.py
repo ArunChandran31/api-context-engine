@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from redis.exceptions import RedisError
 
 from app.cache.service import CacheService
 
@@ -24,6 +25,22 @@ class FakeRedis:
         del self.data[key]
         self.ttls.pop(key, None)
         return 1
+
+
+class FailingRedis:
+    def get(self, key: str) -> str | None:
+        raise RedisError("Redis unavailable")
+
+    def set(self, key: str, value: str, ex: int) -> None:
+        raise RedisError("Redis unavailable")
+
+    def delete(self, key: str) -> int:
+        raise RedisError("Redis unavailable")
+
+
+class CorruptRedis(FakeRedis):
+    def get(self, key: str) -> str | None:
+        return "{invalid-json"
 
 
 def test_get_returns_none_for_missing_key() -> None:
@@ -84,3 +101,27 @@ def test_delete_returns_false_when_key_does_not_exist() -> None:
     cache = CacheService(FakeRedis())
 
     assert cache.delete("missing") is False
+
+
+def test_get_returns_none_when_redis_is_unavailable() -> None:
+    cache = CacheService(FailingRedis())
+
+    assert cache.get("rag:test") is None
+
+
+def test_get_returns_none_for_invalid_json() -> None:
+    cache = CacheService(CorruptRedis())
+
+    assert cache.get("rag:test") is None
+
+
+def test_set_does_not_raise_when_redis_is_unavailable() -> None:
+    cache = CacheService(FailingRedis())
+
+    cache.set("rag:test", {"value": 1}, ttl_seconds=60)
+
+
+def test_delete_returns_false_when_redis_is_unavailable() -> None:
+    cache = CacheService(FailingRedis())
+
+    assert cache.delete("rag:test") is False
