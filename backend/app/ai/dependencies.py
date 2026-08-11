@@ -11,6 +11,7 @@ from app.ai.deterministic_test_case_generator import (
     DeterministicTestCaseGenerator,
 )
 from app.ai.groq_provider import GroqLLMProvider
+from app.ai.llm_test_case_generator import LLMTestCaseGenerator
 from app.ai.prompt_builder import GroundedPromptBuilder
 from app.ai.provider import LLMProvider
 from app.ai.question_answering_service import (
@@ -103,19 +104,30 @@ def build_ai_dependencies(
 
     test_case_prompt_builder = TestCasePromptBuilder()
 
-    test_case_generator: TestCaseGenerator = DeterministicTestCaseGenerator(
-        result=TestCaseGenerationResult(
-            test_cases=[
-                GeneratedTestCase(
-                    category="Positive",
-                    description=(
-                        "The deterministic test case generator "
-                        "is configured correctly."
-                    ),
-                )
-            ]
+    if application_settings.llm_provider == "deterministic":
+        test_case_generator: TestCaseGenerator = DeterministicTestCaseGenerator(
+            result=TestCaseGenerationResult(
+                test_cases=[
+                    GeneratedTestCase(
+                        category="Positive",
+                        description=(
+                            "The deterministic test case generator "
+                            "is configured correctly."
+                        ),
+                    )
+                ]
+            )
         )
-    )
+
+    elif application_settings.llm_provider == "groq":
+        test_case_generator = LLMTestCaseGenerator(
+            llm_provider=llm_provider,
+        )
+
+    else:
+        raise ValueError(
+            f"Unsupported LLM provider: {application_settings.llm_provider}"
+        )
 
     test_case_generation_service = TestCaseGenerationService(
         retrieval_service=rag.retrieval_service,

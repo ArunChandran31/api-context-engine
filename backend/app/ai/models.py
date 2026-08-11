@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -11,6 +12,7 @@ class GenerationRequest:
     """
 
     prompt: str
+    response_format: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if not self.prompt.strip():
