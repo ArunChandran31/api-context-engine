@@ -1,4 +1,8 @@
+from typing import cast
+
 from groq import Groq
+from groq.types.chat import ChatCompletionMessageParam
+from groq.types.chat.completion_create_params import ResponseFormat
 
 from app.ai.models import GenerationRequest, GenerationResult
 from app.ai.provider import LLMProvider
@@ -30,15 +34,30 @@ class GroqLLMProvider(LLMProvider):
         self,
         request: GenerationRequest,
     ) -> GenerationResult:
-        completion = self._client.chat.completions.create(
-            model=self._model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": request.prompt,
-                }
-            ],
+        messages: list[ChatCompletionMessageParam] = [
+            {
+                "role": "user",
+                "content": request.prompt,
+            }
+        ]
+
+        response_format = (
+            cast(ResponseFormat, request.response_format)
+            if request.response_format is not None
+            else None
         )
+
+        if request.response_format is None:
+            completion = self._client.chat.completions.create(
+                model=self._model,
+                messages=messages,
+            )
+        else:
+            completion = self._client.chat.completions.create(
+                model=self._model,
+                messages=messages,
+                response_format=response_format,
+            )
 
         content = completion.choices[0].message.content
 
