@@ -1,30 +1,10 @@
-# from fastapi import FastAPI
-# from app.api.health import router as health_router
-# from app.api.upload import router as upload_router
-# from app.database.base import Base
-# from app.database.session import engine
-
-# app = FastAPI(
-#     title="API Context Engine",
-#     description="A simple API context engine",
-#     version="0.1.0"
-# )
-# app.include_router(health_router)
-# app.include_router(upload_router)
-
-# @app.get("/")
-# async def root():
-#     return {"message": "Welcome to the API Context Engine!"}
-
-# @app.on_event("startup")
-# def startup():
-#     Base.metadata.create_all(bind=engine)
-
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
+from app.ai.exceptions import LLMProviderError
 from app.api.ai import router as ai_router
 from app.api.debug import router as debug_router
 from app.api.endpoints import router as endpoint_router
@@ -61,6 +41,22 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down %s...", settings.app_name)
 
 
+async def llm_provider_exception_handler(
+    request: Request,
+    exc: LLMProviderError,
+) -> JSONResponse:
+    """
+    Converts expected LLM provider failures into controlled API responses.
+    """
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": "llm_provider_error",
+            "message": str(exc),
+        },
+    )
+
+
 app = FastAPI(
     title=settings.app_name,
     description=settings.app_description,
@@ -68,6 +64,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_exception_handler(
+    LLMProviderError,
+    llm_provider_exception_handler,
+)
 
 # Register API routers
 app.include_router(health_router)

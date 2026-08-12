@@ -114,6 +114,33 @@ def test_build_ai_dependencies_uses_groq_provider() -> None:
     )
 
 
+def test_build_ai_dependencies_passes_llm_timeout_to_groq_provider() -> None:
+    settings = Settings(
+        LLM_PROVIDER="groq",
+        GROQ_API_KEY="test-api-key",
+        GROQ_MODEL="test-model",
+        LLM_TIMEOUT_SECONDS=10.0,
+        _env_file=None,  # pyright: ignore[reportCallIssue]
+    )
+
+    retrieval_service = MagicMock(spec=RAGRetrievalService)
+
+    rag_dependencies = MagicMock()
+    rag_dependencies.retrieval_service = retrieval_service
+
+    dependencies = build_ai_dependencies(
+        settings=settings,
+        rag_dependencies=rag_dependencies,
+    )
+
+    assert isinstance(
+        dependencies.llm_provider,
+        GroqLLMProvider,
+    )
+
+    assert dependencies.llm_provider._client.timeout == 10.0
+
+
 def test_build_ai_dependencies_uses_llm_test_case_generator_for_groq() -> None:
     settings = Settings(
         LLM_PROVIDER="groq",

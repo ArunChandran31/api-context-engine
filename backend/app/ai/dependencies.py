@@ -86,6 +86,9 @@ def build_ai_dependencies(
         llm_provider = GroqLLMProvider(
             api_key=application_settings.groq_api_key,
             model=application_settings.groq_model,
+            timeout_seconds=application_settings.llm_timeout_seconds,
+            max_retries=application_settings.llm_max_retries,
+            retry_backoff_seconds=application_settings.llm_retry_backoff_seconds,
         )
 
     else:

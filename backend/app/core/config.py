@@ -100,6 +100,24 @@ class Settings(BaseSettings):
         alias="GROQ_MODEL",
     )
 
+    llm_timeout_seconds: float = Field(
+        default=30.0,
+        gt=0,
+        alias="LLM_TIMEOUT_SECONDS",
+    )
+
+    llm_max_retries: int = Field(
+        default=2,
+        ge=0,
+        alias="LLM_MAX_RETRIES",
+    )
+
+    llm_retry_backoff_seconds: float = Field(
+        default=1.0,
+        gt=0,
+        alias="LLM_RETRY_BACKOFF_SECONDS",
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
