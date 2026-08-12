@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 from app.ai.dependencies import AIDependencies
+from app.ai.exceptions import LLMProviderError
 from app.ai.models import GenerationResult
 from app.api.ai import get_ai_dependencies
 from app.main import app
@@ -55,3 +56,78 @@ def test_question_endpoint_rejects_empty_question() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_question_endpoint_returns_503_for_llm_provider_error() -> None:
+    qa_service = MagicMock()
+
+    qa_service.answer.side_effect = LLMProviderError(
+        "LLM provider is temporarily unavailable.",
+    )
+
+    dependencies = AIDependencies(
+        llm_provider=MagicMock(),
+        prompt_builder=MagicMock(),
+        question_answering_service=qa_service,
+        test_case_prompt_builder=MagicMock(),
+        test_case_generation_service=MagicMock(),
+        debug_prompt_builder=MagicMock(),
+        debug_generator=MagicMock(),
+        debug_service=MagicMock(),
+    )
+
+    app.dependency_overrides[get_ai_dependencies] = lambda: dependencies
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/ai/question",
+        json={"question": "Which endpoint creates a pet?"},
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+
+    assert response.json() == {
+        "error": "llm_provider_error",
+        "message": "LLM provider is temporarily unavailable.",
+    }
+
+
+def test_question_endpoint_preserves_llm_provider_status_code() -> None:
+    qa_service = MagicMock()
+
+    qa_service.answer.side_effect = LLMProviderError(
+        "LLM provider rate limit exceeded.",
+        status_code=429,
+    )
+
+    dependencies = AIDependencies(
+        llm_provider=MagicMock(),
+        prompt_builder=MagicMock(),
+        question_answering_service=qa_service,
+        test_case_prompt_builder=MagicMock(),
+        test_case_generation_service=MagicMock(),
+        debug_prompt_builder=MagicMock(),
+        debug_generator=MagicMock(),
+        debug_service=MagicMock(),
+    )
+
+    app.dependency_overrides[get_ai_dependencies] = lambda: dependencies
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/ai/question",
+        json={"question": "Which endpoint creates a pet?"},
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 429
+
+    assert response.json() == {
+        "error": "llm_provider_error",
+        "message": "LLM provider rate limit exceeded.",
+    }
