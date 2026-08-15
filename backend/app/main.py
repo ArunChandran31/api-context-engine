@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.ai.exceptions import LLMProviderError
@@ -43,11 +44,20 @@ async def lifespan(app: FastAPI):
 
 async def llm_provider_exception_handler(
     request: Request,
-    exc: LLMProviderError,
+    exc: Exception,
 ) -> JSONResponse:
     """
     Converts expected LLM provider failures into controlled API responses.
     """
+    if not isinstance(exc, LLMProviderError):
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "internal_server_error",
+                "message": "An unexpected error occurred.",
+            },
+        )
+
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -62,6 +72,17 @@ app = FastAPI(
     description=settings.app_description,
     version=settings.app_version,
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8443",
+        "http://127.0.0.1:8443",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.add_exception_handler(
