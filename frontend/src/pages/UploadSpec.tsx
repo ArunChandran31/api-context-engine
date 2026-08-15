@@ -1,8 +1,11 @@
 import { useState, useRef } from 'react'
+import { uploadSpecification } from '../api/uploads'
 import type { Page } from '../utils'
 import { CARD, BTN_PRIMARY, BTN_SECONDARY, INPUT_STYLE } from '../utils'
 
-interface Props { navigate: (p: Page) => void }
+interface Props {
+  navigate: (p: Page, data?: unknown) => void
+}
 
 type InputMode = 'file' | 'url'
 type UploadStep = 'idle' | 'validating' | 'parsing' | 'indexing' | 'ready' | 'error'
@@ -49,22 +52,45 @@ export default function UploadSpec({ navigate }: Props) {
   const [file, setFile] = useState<File | null>(null)
   const [url, setUrl] = useState('')
   const [uploadStep, setUploadStep] = useState<UploadStep>('idle')
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadedSpecificationId, setUploadedSpecificationId] = useState<number | null>(null)
+  const [uploadedEndpointCount, setUploadedEndpointCount] = useState<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const hasInput = mode === 'file' ? !!file : url.trim().length > 0
 
-  function simulate() {
-    if (!hasInput) return
-    const steps: UploadStep[] = ['validating', 'parsing', 'indexing', 'ready']
-    let i = 0
-    setUploadStep('validating')
-    const tick = () => {
-      i++
-      if (i < steps.length) {
-        setTimeout(() => { setUploadStep(steps[i]); tick() }, 900)
-      }
+  async function analyzeSpecification() {
+    if (mode !== 'file' || !file) {
+      setUploadError('Please select an OpenAPI JSON or YAML file.')
+      setUploadStep('error')
+      return
     }
-    setTimeout(tick, 900)
+
+    setUploadError(null)
+    setUploadedSpecificationId(null)
+    setUploadedEndpointCount(null)
+    setUploadStep('validating')
+
+    try {
+      setUploadStep('parsing')
+
+      const result = await uploadSpecification(file)
+
+      setUploadStep('indexing')
+
+      setUploadedSpecificationId(result.specification_id)
+      setUploadedEndpointCount(result.endpoints_created)
+
+      setUploadStep('ready')
+    } catch (error) {
+      setUploadStep('error')
+
+      setUploadError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to upload specification.',
+      )
+    }
   }
 
   function getStepState(idx: number): 'done' | 'active' | 'pending' {
@@ -200,7 +226,7 @@ export default function UploadSpec({ navigate }: Props) {
             <div className="px-5 pb-5 flex gap-2">
               <button
                 style={{ ...BTN_PRIMARY, opacity: hasInput ? 1 : 0.4, cursor: hasInput ? 'pointer' : 'not-allowed' }}
-                onClick={simulate}
+                onClick={analyzeSpecification}
                 disabled={!hasInput}
               >
                 <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
@@ -208,8 +234,15 @@ export default function UploadSpec({ navigate }: Props) {
                 </svg>
                 Analyze specification
               </button>
-              {uploadStep === 'ready' && (
-                <button style={BTN_SECONDARY} onClick={() => navigate('explorer')}>
+              {uploadStep === 'ready' && uploadedSpecificationId !== null && (
+                <button
+                  style={BTN_SECONDARY}
+                  onClick={() =>
+                    navigate('explorer', {
+                      specificationId: uploadedSpecificationId,
+                    })
+                  }
+                >
                   Explore APIs →
                 </button>
               )}
@@ -229,8 +262,29 @@ export default function UploadSpec({ navigate }: Props) {
 
             {uploadStep === 'ready' && (
               <div className="mt-4 rounded-[14px] p-3" style={{ background: '#dcfce7', border: '1px solid #86efac' }}>
-                <div className="text-[13px] font-semibold text-[#15803d]">Specification indexed</div>
-                <div className="text-[12px] text-[#16a34a] mt-0.5">42 endpoints discovered and ready to explore</div>
+                <div className="text-[13px] font-semibold text-[#15803d]">
+                  Specification indexed
+                </div>
+                <div className="text-[12px] text-[#16a34a] mt-0.5">
+                  {uploadedEndpointCount ?? 0} endpoints discovered and ready to explore
+                </div>
+              </div>
+            )}
+
+            {uploadStep === 'error' && uploadError && (
+              <div
+                className="mt-4 rounded-[14px] p-3"
+                style={{
+                  background: '#fee2e2',
+                  border: '1px solid #fca5a5',
+                }}
+              >
+                <div className="text-[13px] font-semibold text-[#b91c1c]">
+                  Upload failed
+                </div>
+                <div className="text-[12px] text-[#dc2626] mt-0.5">
+                  {uploadError}
+                </div>
               </div>
             )}
 
