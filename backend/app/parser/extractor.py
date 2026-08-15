@@ -53,6 +53,10 @@ def extract_specification(
                     summary=operation.get("summary"),
                     description=operation.get("description"),
                     operation_id=operation.get("operationId"),
+                    parameters=operation.get("parameters"),
+                    request_body=operation.get("requestBody"),
+                    responses=operation.get("responses"),
+                    security=operation.get("security"),
                 )
             )
 

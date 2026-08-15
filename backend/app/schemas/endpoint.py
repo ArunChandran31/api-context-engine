@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import Field
 
 from app.schemas.common import BaseSchema
@@ -16,6 +18,14 @@ class EndpointCreate(BaseSchema):
 
     operation_id: str | None = None
 
+    parameters: list[dict[str, Any]] | None = None
+
+    request_body: dict[str, Any] | None = None
+
+    responses: dict[str, Any] | None = None
+
+    security: list[dict[str, Any]] | None = None
+
 
 class EndpointResponse(BaseSchema):
     id: int
@@ -31,3 +41,11 @@ class EndpointResponse(BaseSchema):
     description: str | None
 
     operation_id: str | None
+
+    parameters: list[dict[str, Any]] | None
+
+    request_body: dict[str, Any] | None
+
+    responses: dict[str, Any] | None
+
+    security: list[dict[str, Any]] | None

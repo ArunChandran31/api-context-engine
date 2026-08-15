@@ -42,6 +42,10 @@ class EndpointService:
             summary=endpoint.summary,
             description=endpoint.description,
             operation_id=endpoint.operation_id,
+            parameters=endpoint.parameters,
+            request_body=endpoint.request_body,
+            responses=endpoint.responses,
+            security=endpoint.security,
         )
 
         return self.repository.add(db, entity)

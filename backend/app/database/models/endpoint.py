@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import JSON, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -46,6 +46,26 @@ class Endpoint(Base):
 
     operation_id: Mapped[str | None] = mapped_column(
         String(255),
+        nullable=True,
+    )
+
+    parameters: Mapped[list[dict] | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    request_body: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    responses: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    security: Mapped[list[dict] | None] = mapped_column(
+        JSON,
         nullable=True,
     )
 

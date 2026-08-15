@@ -79,6 +79,10 @@ class UploadService:
                     summary=endpoint.summary,
                     description=endpoint.description,
                     operation_id=endpoint.operation_id,
+                    parameters=endpoint.parameters,
+                    request_body=endpoint.request_body,
+                    responses=endpoint.responses,
+                    security=endpoint.security,
                 )
                 for endpoint in parsed.endpoints
             ]

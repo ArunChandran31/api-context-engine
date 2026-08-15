@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -22,6 +23,10 @@ class ParsedEndpoint:
     summary: str | None = None
     description: str | None = None
     operation_id: str | None = None
+    parameters: list[dict[str, Any]] | None = None
+    request_body: dict[str, Any] | None = None
+    responses: dict[str, Any] | None = None
+    security: list[dict[str, Any]] | None = None
 
 
 @dataclass
