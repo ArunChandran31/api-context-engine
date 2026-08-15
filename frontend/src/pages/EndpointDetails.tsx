@@ -413,7 +413,7 @@ function renderResponses(ep: ApiEndpoint) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {entries.map(([code, response]) => {
         const style = getResponseStyle(code)
 
@@ -423,21 +423,114 @@ function renderResponses(ep: ApiEndpoint) {
             ? response.description
             : 'No description'
 
+        const content =
+          response &&
+          typeof response.content === 'object' &&
+          !Array.isArray(response.content)
+            ? response.content as Record<string, unknown>
+            : {}
+
+        const contentEntries = Object.entries(content)
+
         return (
           <div
             key={code}
-            className="flex items-start gap-3"
+            className="flex flex-col gap-3"
           >
-            <span
-              className="font-mono text-[13px] px-2 py-0.5 rounded-full font-semibold"
-              style={style}
-            >
-              {code}
-            </span>
+            <div className="flex items-start gap-3">
+              <span
+                className="font-mono text-[13px] px-2 py-0.5 rounded-full font-semibold"
+                style={style}
+              >
+                {code}
+              </span>
 
-            <span className="text-[13px] text-[#555]">
-              {description}
-            </span>
+              <span className="text-[13px] text-[#555]">
+                {description}
+              </span>
+            </div>
+
+            {contentEntries.length > 0 && (
+              <div className="ml-0 flex flex-col gap-3">
+                {contentEntries.map(
+                  ([contentType, mediaType]) => {
+                    const mediaTypeObject =
+                      mediaType &&
+                      typeof mediaType === 'object' &&
+                      !Array.isArray(mediaType)
+                        ? mediaType as Record<string, unknown>
+                        : {}
+
+                    const schema =
+                      mediaTypeObject.schema &&
+                      typeof mediaTypeObject.schema === 'object' &&
+                      !Array.isArray(mediaTypeObject.schema)
+                        ? mediaTypeObject.schema as Record<
+                            string,
+                            unknown
+                          >
+                        : undefined
+
+                    return (
+                      <div
+                        key={contentType}
+                        className="rounded-[12px] p-3"
+                        style={{
+                          background: 'rgba(0,0,0,0.025)',
+                          border:
+                            '1px solid rgba(0,0,0,0.05)',
+                        }}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-[12px] text-[#aaa]">
+                            Content type
+                          </span>
+
+                          <span className="font-mono text-[12px] text-[#1a1a1a]">
+                            {contentType}
+                          </span>
+                        </div>
+
+                        {schema ? (
+                          <div className="flex flex-col gap-2">
+                            <div className="text-[12px] text-[#aaa]">
+                              Schema
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-[13px] text-[#1a1a1a]">
+                                {getSchemaType(schema)}
+                              </span>
+
+                              {typeof schema.format === 'string' && (
+                                <span
+                                  className="px-2 py-0.5 rounded-full text-[11px] font-mono"
+                                  style={{
+                                    background:
+                                      'rgba(0,0,0,0.05)',
+                                    color: '#666',
+                                  }}
+                                >
+                                  {schema.format}
+                                </span>
+                              )}
+                            </div>
+
+                            <Code>
+                              {formatJson(schema)}
+                            </Code>
+                          </div>
+                        ) : (
+                          <div className="text-[13px] text-[#888]">
+                            No response schema defined.
+                          </div>
+                        )}
+                      </div>
+                    )
+                  },
+                )}
+              </div>
+            )}
           </div>
         )
       })}
