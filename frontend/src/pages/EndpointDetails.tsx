@@ -111,6 +111,44 @@ function getSchemaType(
   return 'object'
 }
 
+function getSchemaDetails(
+  schema: Record<string, unknown> | undefined,
+): {
+  format?: string
+  enumValues?: string[]
+  defaultValue?: unknown
+  nullable?: boolean
+} {
+  if (!schema) {
+    return {}
+  }
+
+  const details: {
+    format?: string
+    enumValues?: string[]
+    defaultValue?: unknown
+    nullable?: boolean
+  } = {}
+
+  if (typeof schema.format === 'string') {
+    details.format = schema.format
+  }
+
+  if (Array.isArray(schema.enum)) {
+    details.enumValues = schema.enum.map(String)
+  }
+
+  if ('default' in schema) {
+    details.defaultValue = schema.default
+  }
+
+  if (typeof schema.nullable === 'boolean') {
+    details.nullable = schema.nullable
+  }
+
+  return details
+}
+
 function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
@@ -186,6 +224,7 @@ function renderParameters(ep: ApiEndpoint) {
               : undefined
 
           const required = parameter.required === true
+          const schemaDetails = getSchemaDetails(schema)
 
           return (
             <tr
@@ -224,7 +263,68 @@ function renderParameters(ep: ApiEndpoint) {
               </td>
 
               <td className="py-2 text-[#666]">
-                {parameter.description ?? 'No description'}
+                <div>
+                  {parameter.description ?? 'No description'}
+                </div>
+
+                {(schemaDetails.format ||
+                  schemaDetails.enumValues ||
+                  'defaultValue' in schemaDetails ||
+                  schemaDetails.nullable !== undefined) && (
+                  <div className="flex flex-wrap gap-2 mt-1.5">
+                    {schemaDetails.format && (
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[11px] font-mono"
+                        style={{
+                          background: 'rgba(0,0,0,0.05)',
+                          color: '#666',
+                        }}
+                      >
+                        format: {schemaDetails.format}
+                      </span>
+                    )}
+
+                    {schemaDetails.enumValues && (
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[11px] font-mono"
+                        style={{
+                          background: '#f3f4f6',
+                          color: '#666',
+                        }}
+                      >
+                        enum: {schemaDetails.enumValues.join(' | ')}
+                      </span>
+                    )}
+
+                    {'defaultValue' in schemaDetails && (
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[11px] font-mono"
+                        style={{
+                          background: '#f3f4f6',
+                          color: '#666',
+                        }}
+                      >
+                        default: {String(schemaDetails.defaultValue)}
+                      </span>
+                    )}
+
+                    {schemaDetails.nullable !== undefined && (
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[11px]"
+                        style={{
+                          background: schemaDetails.nullable
+                            ? '#dbeafe'
+                            : 'rgba(0,0,0,0.05)',
+                          color: schemaDetails.nullable
+                            ? '#1d4ed8'
+                            : '#888',
+                        }}
+                      >
+                        {schemaDetails.nullable ? 'nullable' : 'non-nullable'}
+                      </span>
+                    )}
+                  </div>
+                )}
               </td>
             </tr>
           )
@@ -243,7 +343,61 @@ function renderRequestBody(ep: ApiEndpoint) {
     )
   }
 
-  return <Code>{formatJson(ep.request_body)}</Code>
+  const requestBody = ep.request_body
+  const required = requestBody.required === true
+
+  const content =
+    requestBody.content &&
+    typeof requestBody.content === 'object' &&
+    !Array.isArray(requestBody.content)
+      ? requestBody.content as Record<string, unknown>
+      : {}
+
+  const contentEntries = Object.entries(content)
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <span className="text-[13px] text-[#555]">
+          Required
+        </span>
+
+        <span
+          className="px-2 py-0.5 rounded-full text-[11px]"
+          style={{
+            background: required
+              ? '#dcfce7'
+              : 'rgba(0,0,0,0.05)',
+            color: required ? '#15803d' : '#888',
+          }}
+        >
+          {required ? 'Yes' : 'No'}
+        </span>
+      </div>
+
+      {contentEntries.length === 0 ? (
+        <div className="text-[13px] text-[#888]">
+          No content schema defined.
+        </div>
+      ) : (
+        contentEntries.map(([contentType, mediaType]) => (
+          <div key={contentType} className="flex flex-col gap-2">
+            <div className="text-[12px] text-[#aaa] font-medium">
+              Content type
+            </div>
+
+            <div className="font-mono text-[13px] text-[#1a1a1a]">
+              {contentType}
+            </div>
+
+            <Code>
+              {formatJson(mediaType)}
+            </Code>
+          </div>
+        ))
+      )}
+    </div>
+  )
 }
 
 function renderResponses(ep: ApiEndpoint) {
