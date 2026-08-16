@@ -280,7 +280,7 @@ export default function App() {
     switch (page) {
       case 'dashboard':  return <Dashboard {...pageProps} />
       case 'upload':     return <UploadSpec {...pageProps} />
-      case 'explorer':   return <APIExplorer {...pageProps} />
+      case 'explorer':   return <APIExplorer {...pageProps} data={pageData} />
       case 'endpoint':   return <EndpointDetails {...pageProps} data={pageData} />
       case 'assistant':  return <AIAssistant {...pageProps} />
       case 'debug':      return <DebugAssistant {...pageProps} />
