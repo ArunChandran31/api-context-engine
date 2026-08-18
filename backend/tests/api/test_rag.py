@@ -1,7 +1,5 @@
 from unittest.mock import MagicMock
 
-from fastapi.testclient import TestClient
-
 from app.api.rag import get_rag_dependencies
 from app.cache.dependencies import get_cache_service
 from app.database.models.api_specification import ApiSpecification
@@ -15,6 +13,7 @@ from app.rag.indexing_service import RAGIndexingService
 from app.rag.persistence import VectorStorePersistence
 from app.rag.pipeline import RAGPipeline
 from app.rag.retrieval_service import RAGRetrievalService, RetrievalResult
+from fastapi.testclient import TestClient
 
 
 class KeywordEmbeddingProvider(EmbeddingProvider):
@@ -64,6 +63,16 @@ class FakeCacheService:
 
     def delete(self, key: str) -> bool:
         return self._values.pop(key, None) is not None
+
+    def delete_pattern(self, pattern: str) -> int:
+        import fnmatch
+
+        matching_keys = [key for key in self._values if fnmatch.fnmatch(key, pattern)]
+
+        for key in matching_keys:
+            del self._values[key]
+
+        return len(matching_keys)
 
 
 def test_query_rag_returns_retrieved_results() -> None:
@@ -121,6 +130,7 @@ def test_query_rag_returns_retrieved_results() -> None:
     retrieval_service.retrieve.assert_called_once_with(
         query="How do I create a user?",
         limit=3,
+        specification_id=None,
     )
 
 
@@ -201,6 +211,7 @@ def test_query_rag_uses_configured_default_limit() -> None:
     retrieval_service.retrieve.assert_called_once_with(
         query="How do I list users?",
         limit=7,
+        specification_id=None,
     )
 
 

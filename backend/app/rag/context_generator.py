@@ -1,3 +1,5 @@
+import json
+
 from app.database.models.api_specification import ApiSpecification
 from app.database.models.endpoint import Endpoint
 from app.rag.models import RAGDocument
@@ -63,6 +65,11 @@ class ContextGenerator:
     ) -> str:
         """
         Build deterministic human-readable semantic content for an endpoint.
+
+        Rich OpenAPI metadata such as parameters, request bodies,
+        responses, and security requirements is included so that
+        downstream RAG retrieval has access to the complete endpoint
+        context.
         """
 
         sections = [
@@ -72,11 +79,7 @@ class ContextGenerator:
         if specification.version:
             sections.append(f"Version: {specification.version}")
 
-        sections.extend(
-            [
-                f"Endpoint: {endpoint.method.upper()} {endpoint.path}",
-            ]
-        )
+        sections.append(f"Endpoint: {endpoint.method.upper()} {endpoint.path}")
 
         if endpoint.summary:
             sections.append(f"Summary: {endpoint.summary}")
@@ -86,5 +89,45 @@ class ContextGenerator:
 
         if endpoint.operation_id:
             sections.append(f"Operation ID: {endpoint.operation_id}")
+
+        if endpoint.parameters:
+            sections.append(
+                "Parameters:\n"
+                + json.dumps(
+                    endpoint.parameters,
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+
+        if endpoint.request_body:
+            sections.append(
+                "Request Body:\n"
+                + json.dumps(
+                    endpoint.request_body,
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+
+        if endpoint.responses:
+            sections.append(
+                "Responses:\n"
+                + json.dumps(
+                    endpoint.responses,
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+
+        if endpoint.security:
+            sections.append(
+                "Security:\n"
+                + json.dumps(
+                    endpoint.security,
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
 
         return "\n".join(sections)

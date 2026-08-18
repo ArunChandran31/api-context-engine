@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock
 
 import pytest
-
 from app.ai.test_case_generation_service import (
     TestCaseGenerationService,
 )
@@ -57,6 +56,7 @@ def test_generate_retrieves_context_and_generates_test_cases() -> None:
 
     generated = service.generate(
         "POST /users",
+        specification_id=3,
     )
 
     assert generated == result
@@ -64,11 +64,14 @@ def test_generate_retrieves_context_and_generates_test_cases() -> None:
     retrieval_service.retrieve.assert_called_once_with(
         query="POST /users",
         limit=3,
+        specification_id=3,
     )
 
     prompt_builder.build.assert_called_once_with(
         endpoint="POST /users",
         contexts=contexts,
+        test_style="jest",
+        categories=None,
     )
 
     generator.generate.assert_called_once_with(
@@ -100,6 +103,7 @@ def test_generate_supports_empty_retrieval_results() -> None:
 
     result = service.generate(
         "POST /users",
+        specification_id=3,
     )
 
     assert len(result.test_cases) == 1
@@ -124,7 +128,35 @@ def test_generate_rejects_empty_endpoint() -> None:
         ValueError,
         match="Endpoint cannot be empty.",
     ):
-        service.generate("   ")
+        service.generate(
+            "   ",
+            specification_id=3,
+        )
+
+    retrieval_service.retrieve.assert_not_called()
+    prompt_builder.build.assert_not_called()
+    generator.generate.assert_not_called()
+
+
+def test_generate_rejects_invalid_specification_id() -> None:
+    retrieval_service = MagicMock(spec=RAGRetrievalService)
+    prompt_builder = MagicMock(spec=TestCasePromptBuilder)
+    generator = MagicMock(spec=TestCaseGenerator)
+
+    service = TestCaseGenerationService(
+        retrieval_service=retrieval_service,
+        prompt_builder=prompt_builder,
+        generator=generator,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Specification ID must be greater than zero.",
+    ):
+        service.generate(
+            "POST /users",
+            specification_id=0,
+        )
 
     retrieval_service.retrieve.assert_not_called()
     prompt_builder.build.assert_not_called()

@@ -11,6 +11,7 @@ from app.ai.deterministic_test_case_generator import (
     DeterministicTestCaseGenerator,
 )
 from app.ai.groq_provider import GroqLLMProvider
+from app.ai.llm_debug_generator import LLMDebugGenerator
 from app.ai.llm_test_case_generator import LLMTestCaseGenerator
 from app.ai.prompt_builder import GroundedPromptBuilder
 from app.ai.provider import LLMProvider
@@ -32,6 +33,7 @@ from app.core.config import Settings, get_settings
 from app.rag.dependencies import (
     RAGDependencies,
     build_rag_dependencies,
+    get_rag_dependencies,
 )
 
 
@@ -67,9 +69,14 @@ def build_ai_dependencies(
 
     application_settings = settings or get_settings()
 
-    rag = rag_dependencies or build_rag_dependencies(
-        settings=application_settings,
-    )
+    if rag_dependencies is not None:
+        rag = rag_dependencies
+    elif settings is None:
+        rag = get_rag_dependencies()
+    else:
+        rag = build_rag_dependencies(
+            settings=application_settings,
+        )
 
     if application_settings.llm_provider == "deterministic":
         llm_provider: LLMProvider = DeterministicLLMProvider(
@@ -141,9 +148,20 @@ def build_ai_dependencies(
 
     debug_prompt_builder = DebugPromptBuilder()
 
-    debug_generator = DeterministicDebugGenerator(
-        explanation=("The deterministic debug generator is configured correctly."),
-    )
+    if application_settings.llm_provider == "deterministic":
+        debug_generator: DebugGenerator = DeterministicDebugGenerator(
+            explanation=("The deterministic debug generator is configured correctly."),
+        )
+
+    elif application_settings.llm_provider == "groq":
+        debug_generator = LLMDebugGenerator(
+            llm_provider=llm_provider,
+        )
+
+    else:
+        raise ValueError(
+            f"Unsupported LLM provider: {application_settings.llm_provider}"
+        )
 
     debug_service = DebugService(
         retrieval_service=rag.retrieval_service,

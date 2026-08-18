@@ -1,8 +1,5 @@
 from unittest.mock import MagicMock
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app.ai.dependencies import AIDependencies
 from app.ai.test_case_models import (
     GeneratedTestCase,
@@ -12,6 +9,8 @@ from app.api.test_cases import (
     get_ai_dependencies,
     router,
 )
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 
 def create_test_client(
@@ -46,6 +45,7 @@ def test_generate_test_cases_returns_generated_cases() -> None:
         "/ai/test-cases",
         json={
             "question": "Generate test cases for POST /pets.",
+            "specification_id": 3,
         },
     )
 
@@ -60,6 +60,19 @@ def test_generate_test_cases_returns_generated_cases() -> None:
         ]
     }
 
+    service.generate.assert_called_once_with(
+        endpoint="Generate test cases for POST /pets.",
+        specification_id=3,
+        test_style="jest",
+        categories=[
+            "happy",
+            "validation",
+            "edge",
+            "auth",
+            "other",
+        ],
+    )
+
 
 def test_generate_test_cases_rejects_empty_question() -> None:
     dependencies = MagicMock(spec=AIDependencies)
@@ -70,6 +83,23 @@ def test_generate_test_cases_rejects_empty_question() -> None:
         "/ai/test-cases",
         json={
             "question": "",
+            "specification_id": 3,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_generate_test_cases_rejects_invalid_specification_id() -> None:
+    dependencies = MagicMock(spec=AIDependencies)
+
+    client = create_test_client(dependencies)
+
+    response = client.post(
+        "/ai/test-cases",
+        json={
+            "question": "Generate test cases for POST /pets.",
+            "specification_id": 0,
         },
     )
 

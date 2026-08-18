@@ -1,5 +1,6 @@
 import json
 import logging
+from collections.abc import Iterator
 from typing import Any, Protocol
 
 from redis.exceptions import RedisError
@@ -15,6 +16,8 @@ class CacheClient(Protocol):
     def set(self, key: str, value: str, ex: int) -> Any: ...
 
     def delete(self, key: str) -> int: ...
+
+    def scan_iter(self, match: str) -> Iterator[str]: ...
 
 
 class CacheService:
@@ -99,3 +102,27 @@ class CacheService:
                 exc_info=exc,
             )
             return False
+
+    def delete_pattern(self, pattern: str) -> int:
+        """
+        Delete all cached values whose Redis keys match the pattern.
+
+        Returns the number of deleted keys.
+
+        Redis failures are treated as cache failures and do not
+        propagate to the caller.
+        """
+        deleted_count = 0
+
+        try:
+            for key in self._client.scan_iter(match=pattern):
+                deleted_count += int(self._client.delete(key))
+
+        except RedisError as exc:
+            logger.warning(
+                "Redis cache PATTERN DELETE failed",
+                extra={"cache_pattern": pattern},
+                exc_info=exc,
+            )
+
+        return deleted_count

@@ -35,7 +35,10 @@ def generate_test_cases(
     ],
 ) -> TestCaseGenerationResponse:
     result = dependencies.test_case_generation_service.generate(
-        request.question,
+        endpoint=request.question,
+        specification_id=request.specification_id,
+        test_style=request.test_style,
+        categories=request.categories,
     )
 
     return TestCaseGenerationResponse(

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from app.core.config import Settings, get_settings
@@ -92,3 +93,8 @@ def build_rag_dependencies(
         pipeline=pipeline,
         retrieval_limit=application_settings.rag_retrieval_limit,
     )
+
+
+@lru_cache
+def get_rag_dependencies() -> RAGDependencies:
+    return build_rag_dependencies()

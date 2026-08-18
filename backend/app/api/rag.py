@@ -1,17 +1,19 @@
 import logging
-from functools import lru_cache
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.cache.dependencies import get_cache_service
-from app.cache.keys import build_rag_query_cache_key
+from app.cache.keys import (
+    build_rag_query_cache_key,
+    build_rag_query_cache_pattern,
+)
 from app.cache.service import CacheService
 from app.core.config import settings
 from app.database.session import get_db
 from app.rag.context_generator import ContextGenerator
-from app.rag.dependencies import RAGDependencies, build_rag_dependencies
+from app.rag.dependencies import RAGDependencies, get_rag_dependencies
 from app.schemas.rag import (
     RAGIndexResponse,
     RAGQueryRequest,
@@ -32,11 +34,6 @@ specification_service = ApiSpecificationService()
 context_generator = ContextGenerator()
 
 
-@lru_cache
-def get_rag_dependencies() -> RAGDependencies:
-    return build_rag_dependencies()
-
-
 @router.post(
     "/index/{specification_id}",
     response_model=RAGIndexResponse,
@@ -48,6 +45,10 @@ def index_specification(
     dependencies: Annotated[
         RAGDependencies,
         Depends(get_rag_dependencies),
+    ],
+    cache: Annotated[
+        CacheService,
+        Depends(get_cache_service),
     ],
 ) -> RAGIndexResponse:
     specification = specification_service.get(
@@ -68,6 +69,25 @@ def index_specification(
     )
 
     dependencies.persistence.save()
+
+    # Invalidate cached RAG queries for this specification.
+    cache_pattern = build_rag_query_cache_pattern(
+        specification_id=specification_id,
+    )
+
+    deleted_cache_entries = cache.delete_pattern(
+        cache_pattern,
+    )
+
+    logger.info(
+        "RAG specification indexed",
+        extra={
+            "specification_id": specification_id,
+            "documents_indexed": len(documents),
+            "chunks_indexed": chunks_indexed,
+            "cache_entries_invalidated": deleted_cache_entries,
+        },
+    )
 
     return RAGIndexResponse(
         specification_id=specification_id,
@@ -99,11 +119,14 @@ def query_rag(
     cache_key = build_rag_query_cache_key(
         query=request.query,
         limit=limit,
+        specification_id=request.specification_id,
     )
 
     cache_get_timer = Timer()
     cache_get_timer.start()
+
     cached_results = cache.get(cache_key)
+
     cache_get_ms = cache_get_timer.stop()
 
     if cached_results is not None:
@@ -141,6 +164,7 @@ def query_rag(
     results = dependencies.retrieval_service.retrieve(
         query=request.query,
         limit=limit,
+        specification_id=request.specification_id,
     )
 
     retrieval_ms = retrieval_timer.stop()

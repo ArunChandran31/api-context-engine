@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock
 
 import pytest
-
 from app.ai.models import GenerationRequest, GenerationResult
 from app.ai.prompt_builder import GroundedPromptBuilder
 from app.ai.provider import LLMProvider
@@ -43,13 +42,16 @@ def test_answer_retrieves_context_and_generates_response() -> None:
 
     result = service.answer(
         "Which endpoint creates a user?",
+        specification_id=3,
     )
 
-    assert result == generation_result
+    assert result.answer == generation_result
+    assert result.sources == contexts
 
     retrieval_service.retrieve.assert_called_once_with(
         query="Which endpoint creates a user?",
         limit=3,
+        specification_id=3,
     )
 
     prompt_builder.build.assert_called_once_with(
@@ -81,9 +83,11 @@ def test_answer_supports_empty_retrieval_results() -> None:
 
     result = service.answer(
         "Which endpoint deletes an account?",
+        specification_id=3,
     )
 
-    assert result.content == "The available API context is insufficient."
+    assert result.answer.content == "The available API context is insufficient."
+    assert result.sources == []
 
     generation_request = llm_provider.generate.call_args.args[0]
 
@@ -106,7 +110,10 @@ def test_answer_rejects_empty_question() -> None:
         ValueError,
         match="Question cannot be empty.",
     ):
-        service.answer("   ")
+        service.answer(
+            "   ",
+            specification_id=3,
+        )
 
     retrieval_service.retrieve.assert_not_called()
     prompt_builder.build.assert_not_called()

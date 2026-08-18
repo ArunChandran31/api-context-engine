@@ -1,16 +1,29 @@
+from dataclasses import dataclass
+
 from app.ai.models import GenerationResult
 from app.ai.prompt_builder import GroundedPromptBuilder
 from app.ai.provider import LLMProvider
-from app.rag.retrieval_service import RAGRetrievalService
+from app.rag.retrieval_service import RAGRetrievalService, RetrievalResult
+
+
+@dataclass(frozen=True)
+class QuestionAnswerResult:
+    """
+    AI answer together with the API context used to generate it.
+    """
+
+    answer: GenerationResult
+    sources: list[RetrievalResult]
 
 
 class QuestionAnsweringService:
     """
     Orchestrates retrieval-grounded API question answering.
 
-    Retrieves relevant API context, builds a grounded generation
-    request, and delegates text generation to the configured LLM
-    provider.
+    Retrieves relevant indexed API context, builds a grounded
+    generation request, delegates text generation to the configured
+    LLM provider, and preserves the retrieved context for source
+    attribution.
     """
 
     def __init__(
@@ -31,13 +44,18 @@ class QuestionAnsweringService:
     def answer(
         self,
         question: str,
-    ) -> GenerationResult:
+        specification_id: int,
+    ) -> QuestionAnswerResult:
         if not question.strip():
             raise ValueError("Question cannot be empty.")
+
+        if specification_id <= 0:
+            raise ValueError("Specification ID must be greater than zero.")
 
         contexts = self._retrieval_service.retrieve(
             query=question,
             limit=self._retrieval_limit,
+            specification_id=specification_id,
         )
 
         request = self._prompt_builder.build(
@@ -45,4 +63,9 @@ class QuestionAnsweringService:
             contexts=contexts,
         )
 
-        return self._llm_provider.generate(request)
+        generation_result = self._llm_provider.generate(request)
+
+        return QuestionAnswerResult(
+            answer=generation_result,
+            sources=contexts,
+        )

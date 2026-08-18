@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock
 
 import pytest
-
 from app.ai.dependencies import AIDependencies, build_ai_dependencies
 from app.ai.deterministic_provider import DeterministicLLMProvider
 from app.ai.groq_provider import GroqLLMProvider
@@ -58,15 +57,18 @@ def test_question_answering_service_uses_rag_retrieval_service() -> None:
     )
 
     result = dependencies.question_answering_service.answer(
-        "Which endpoint creates a user?"
+        "Which endpoint creates a user?",
+        specification_id=3,
     )
 
     retrieval_service.retrieve.assert_called_once_with(
         query="Which endpoint creates a user?",
         limit=settings.rag_retrieval_limit,
+        specification_id=3,
     )
 
-    assert result.content
+    assert result.answer.content
+    assert result.sources == []
 
 
 def test_build_ai_dependencies_uses_deterministic_provider_by_default() -> None:

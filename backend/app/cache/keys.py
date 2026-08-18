@@ -7,6 +7,7 @@ CACHE_VERSION = "v1"
 def build_rag_query_cache_key(
     query: str,
     limit: int,
+    specification_id: int | None = None,
 ) -> str:
     """
     Build a deterministic cache key for an RAG query.
@@ -22,5 +23,25 @@ def build_rag_query_cache_key(
         f"{CACHE_VERSION}:"
         f"rag:query:"
         f"{query_hash}:"
-        f"limit:{limit}"
+        f"limit:{limit}:"
+        f"specification:{specification_id}"
+    )
+
+
+def build_rag_query_cache_pattern(
+    specification_id: int,
+) -> str:
+    """
+    Build a Redis key pattern matching all cached RAG queries
+    for a specific API specification.
+    """
+    if specification_id <= 0:
+        raise ValueError("Specification ID must be greater than zero.")
+
+    return (
+        f"{CACHE_NAMESPACE}:"
+        f"{CACHE_VERSION}:"
+        f"rag:query:*:"
+        f"limit:*:"
+        f"specification:{specification_id}"
     )

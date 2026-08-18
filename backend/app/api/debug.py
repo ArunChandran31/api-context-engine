@@ -35,7 +35,13 @@ def debug_endpoint(
     ],
 ) -> DebugResponse:
     result = dependencies.debug_service.debug(
-        request.question,
+        question=request.question,
+        specification_id=request.specification_id,
+        endpoint=request.endpoint,
+        status_code=request.status_code,
+        error_message=request.error_message,
+        request_body=request.request_body,
+        response_body=request.response_body,
     )
 
     return DebugResponse(
