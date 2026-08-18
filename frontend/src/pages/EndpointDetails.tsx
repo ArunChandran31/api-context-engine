@@ -320,7 +320,9 @@ function renderParameters(ep: ApiEndpoint) {
                             : '#888',
                         }}
                       >
-                        {schemaDetails.nullable ? 'nullable' : 'non-nullable'}
+                        {schemaDetails.nullable
+                          ? 'nullable'
+                          : 'non-nullable'}
                       </span>
                     )}
                   </div>
@@ -476,7 +478,8 @@ function renderResponses(ep: ApiEndpoint) {
                         key={contentType}
                         className="rounded-[12px] p-3"
                         style={{
-                          background: 'rgba(0,0,0,0.025)',
+                          background:
+                            'rgba(0,0,0,0.025)',
                           border:
                             '1px solid rgba(0,0,0,0.05)',
                         }}
@@ -674,7 +677,11 @@ export default function EndpointDetails({
     <div>
       {/* Back */}
       <button
-        onClick={() => navigate('explorer')}
+        onClick={() =>
+          navigate('explorer', {
+            specificationId: ep.api_specification_id,
+          })
+        }
         className="flex items-center gap-1.5 text-[13px] text-[#888] mb-5 hover:text-[#1a1a1a] transition-colors"
         style={{
           background: 'none',
