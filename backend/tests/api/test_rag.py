@@ -6,9 +6,11 @@ from app.database.models.api_specification import ApiSpecification
 from app.database.models.endpoint import Endpoint
 from app.main import app
 from app.rag.chunker import DocumentChunker
+from app.rag.context_generator import ContextGenerator
 from app.rag.dependencies import RAGDependencies
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.in_memory_vector_store import InMemoryVectorStore
+from app.rag.indexing_orchestrator import RAGIndexingOrchestrator
 from app.rag.indexing_service import RAGIndexingService
 from app.rag.persistence import VectorStorePersistence
 from app.rag.pipeline import RAGPipeline
@@ -331,17 +333,22 @@ def test_index_specification_indexes_generated_documents(
     indexing_service.index_document.side_effect = [2, 1]
 
     persistence = MagicMock()
+    cache = FakeCacheService()
+
+    orchestrator = RAGIndexingOrchestrator(
+        context_generator=ContextGenerator(),
+        indexing_service=indexing_service,
+        persistence=persistence,
+        cache_service=cache,
+    )
 
     dependencies = MagicMock(spec=RAGDependencies)
-    dependencies.indexing_service = indexing_service
-    dependencies.persistence = persistence
+    dependencies.indexing_orchestrator = orchestrator
 
     monkeypatch.setattr(
         "app.api.rag.specification_service.get",
         lambda db, specification_id: specification,
     )
-
-    cache = FakeCacheService()
 
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
@@ -413,17 +420,22 @@ def test_index_specification_handles_specification_without_endpoints(
 
     indexing_service = MagicMock()
     persistence = MagicMock()
+    cache = FakeCacheService()
+
+    orchestrator = RAGIndexingOrchestrator(
+        context_generator=ContextGenerator(),
+        indexing_service=indexing_service,
+        persistence=persistence,
+        cache_service=cache,
+    )
 
     dependencies = MagicMock(spec=RAGDependencies)
-    dependencies.indexing_service = indexing_service
-    dependencies.persistence = persistence
+    dependencies.indexing_orchestrator = orchestrator
 
     monkeypatch.setattr(
         "app.api.rag.specification_service.get",
         lambda db, specification_id: specification,
     )
-
-    cache = FakeCacheService()
 
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
@@ -507,6 +519,17 @@ def test_indexed_specification_can_be_queried_through_shared_vector_store(
         retrieval_service=retrieval_service,
     )
 
+    cache = FakeCacheService()
+
+    context_generator = ContextGenerator()
+
+    indexing_orchestrator = RAGIndexingOrchestrator(
+        context_generator=context_generator,
+        indexing_service=indexing_service,
+        persistence=persistence,
+        cache_service=cache,
+    )
+
     dependencies = RAGDependencies(
         embedding_provider=embedding_provider,
         vector_store=vector_store,
@@ -515,6 +538,8 @@ def test_indexed_specification_can_be_queried_through_shared_vector_store(
         indexing_service=indexing_service,
         retrieval_service=retrieval_service,
         pipeline=pipeline,
+        context_generator=context_generator,
+        indexing_orchestrator=indexing_orchestrator,
         retrieval_limit=5,
     )
 
@@ -522,8 +547,6 @@ def test_indexed_specification_can_be_queried_through_shared_vector_store(
         "app.api.rag.specification_service.get",
         lambda db, specification_id: specification,
     )
-
-    cache = FakeCacheService()
 
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
@@ -578,17 +601,22 @@ def test_index_specification_persists_after_success(
 
     indexing_service = MagicMock()
     persistence = MagicMock(spec=VectorStorePersistence)
+    cache = FakeCacheService()
+
+    orchestrator = RAGIndexingOrchestrator(
+        context_generator=ContextGenerator(),
+        indexing_service=indexing_service,
+        persistence=persistence,
+        cache_service=cache,
+    )
 
     dependencies = MagicMock(spec=RAGDependencies)
-    dependencies.indexing_service = indexing_service
-    dependencies.persistence = persistence
+    dependencies.indexing_orchestrator = orchestrator
 
     monkeypatch.setattr(
         "app.api.rag.specification_service.get",
         lambda db, specification_id: specification,
     )
-
-    cache = FakeCacheService()
 
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
@@ -621,16 +649,22 @@ def test_index_specification_propagates_persistence_failure(
     persistence = MagicMock(spec=VectorStorePersistence)
     persistence.save.side_effect = OSError("Unable to persist vector store.")
 
+    cache = FakeCacheService()
+
+    orchestrator = RAGIndexingOrchestrator(
+        context_generator=ContextGenerator(),
+        indexing_service=indexing_service,
+        persistence=persistence,
+        cache_service=cache,
+    )
+
     dependencies = MagicMock(spec=RAGDependencies)
-    dependencies.indexing_service = indexing_service
-    dependencies.persistence = persistence
+    dependencies.indexing_orchestrator = orchestrator
 
     monkeypatch.setattr(
         "app.api.rag.specification_service.get",
         lambda db, specification_id: specification,
     )
-
-    cache = FakeCacheService()
 
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache

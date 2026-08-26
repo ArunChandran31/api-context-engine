@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 
+from app.rag.indexing_orchestrator import RAGIndexingOrchestrator
 from app.schemas.api_specification import ApiSpecificationCreate
 from app.schemas.endpoint import EndpointCreate
 from app.schemas.upload import UploadResponse
@@ -13,13 +14,18 @@ class UploadService:
     Coordinates the complete OpenAPI ingestion workflow.
 
     This service owns the database transaction for the
-    complete upload operation.
+    complete upload operation and triggers RAG indexing
+    after the database transaction has successfully committed.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        rag_indexing_orchestrator: RAGIndexingOrchestrator,
+    ) -> None:
         self.parser_service = ParserService()
         self.specification_service = ApiSpecificationService()
         self.endpoint_service = EndpointService()
+        self.rag_indexing_orchestrator = rag_indexing_orchestrator
 
     def upload(
         self,
@@ -32,6 +38,9 @@ class UploadService:
 
         The specification and all endpoints are stored
         inside a single database transaction.
+
+        RAG indexing is triggered only after the database
+        transaction has successfully committed.
         """
 
         try:
@@ -52,6 +61,7 @@ class UploadService:
                 title=parsed.title,
                 version=parsed.version,
                 description=parsed.description,
+                base_url=parsed.base_url,
                 source_file=filename,
             )
 
@@ -105,18 +115,26 @@ class UploadService:
             # Reload generated database values.
             db.refresh(specification)
 
-            # --------------------------------------------------
-            # 7. Return upload result
-            # --------------------------------------------------
-
-            return UploadResponse(
-                specification_id=specification.id,
-                title=specification.title,
-                version=specification.version,
-                endpoints_created=len(created_endpoints),
-                filename=filename,
-            )
-
         except Exception:
             db.rollback()
             raise
+
+        # ------------------------------------------------------
+        # 7. Index the committed specification in RAG
+        # ------------------------------------------------------
+
+        self.rag_indexing_orchestrator.index_specification(
+            specification,
+        )
+
+        # ------------------------------------------------------
+        # 8. Return upload result
+        # ------------------------------------------------------
+
+        return UploadResponse(
+            specification_id=specification.id,
+            title=specification.title,
+            version=specification.version,
+            endpoints_created=len(created_endpoints),
+            filename=filename,
+        )

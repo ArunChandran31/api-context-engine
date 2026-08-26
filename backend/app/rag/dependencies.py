@@ -2,10 +2,13 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from app.cache.dependencies import get_cache_service
 from app.core.config import Settings, get_settings
 from app.rag.chunker import DocumentChunker
+from app.rag.context_generator import ContextGenerator
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.faiss_vector_store import FAISSVectorStore
+from app.rag.indexing_orchestrator import RAGIndexingOrchestrator
 from app.rag.indexing_service import RAGIndexingService
 from app.rag.persistence import VectorStorePersistence
 from app.rag.pipeline import RAGPipeline
@@ -25,6 +28,8 @@ class RAGDependencies:
     indexing_service: RAGIndexingService
     retrieval_service: RAGRetrievalService
     pipeline: RAGPipeline
+    context_generator: ContextGenerator
+    indexing_orchestrator: RAGIndexingOrchestrator
     retrieval_limit: int
 
 
@@ -73,6 +78,17 @@ def build_rag_dependencies(
         vector_store=vector_store,
     )
 
+    context_generator = ContextGenerator()
+
+    cache_service = get_cache_service()
+
+    indexing_orchestrator = RAGIndexingOrchestrator(
+        context_generator=context_generator,
+        indexing_service=indexing_service,
+        persistence=vector_store,
+        cache_service=cache_service,
+    )
+
     retrieval_service = RAGRetrievalService(
         embedding_provider=embedding_provider,
         vector_store=vector_store,
@@ -91,6 +107,8 @@ def build_rag_dependencies(
         indexing_service=indexing_service,
         retrieval_service=retrieval_service,
         pipeline=pipeline,
+        context_generator=context_generator,
+        indexing_orchestrator=indexing_orchestrator,
         retrieval_limit=application_settings.rag_retrieval_limit,
     )
 

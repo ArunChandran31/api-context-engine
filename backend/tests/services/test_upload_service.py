@@ -1,12 +1,14 @@
-import pytest
-from sqlalchemy import create_engine, func, select
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
+from unittest.mock import MagicMock
 
+import pytest
 from app.database.base import Base
 from app.database.models.api_specification import ApiSpecification
 from app.database.models.endpoint import Endpoint
+from app.rag.indexing_orchestrator import RAGIndexingOrchestrator
 from app.services.upload_service import UploadService
+from sqlalchemy import create_engine, func, select
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 TEST_DATABASE_URL = "sqlite://"
 
@@ -68,24 +70,52 @@ paths:
 """
 
 
+@pytest.fixture
+def rag_indexing_orchestrator() -> MagicMock:
+    """
+    Mock the RAG indexing orchestrator so upload-service tests
+    do not depend on the real embedding or FAISS infrastructure.
+    """
+
+    return MagicMock(
+        spec=RAGIndexingOrchestrator,
+    )
+
+
 def count_specifications(db: Session) -> int:
-    return db.scalar(select(func.count()).select_from(ApiSpecification)) or 0
+    return (
+        db.scalar(
+            select(func.count()).select_from(ApiSpecification),
+        )
+        or 0
+    )
 
 
 def count_endpoints(db: Session) -> int:
-    return db.scalar(select(func.count()).select_from(Endpoint)) or 0
+    return (
+        db.scalar(
+            select(func.count()).select_from(Endpoint),
+        )
+        or 0
+    )
 
 
 def test_upload_commits_specification_and_endpoints(
     db_session: Session,
     valid_openapi_content: bytes,
+    rag_indexing_orchestrator: MagicMock,
 ):
     """
     A successful upload must persist both the
     specification and all extracted endpoints.
+
+    RAG indexing must be triggered after the
+    database transaction has successfully committed.
     """
 
-    service = UploadService()
+    service = UploadService(
+        rag_indexing_orchestrator=rag_indexing_orchestrator,
+    )
 
     result = service.upload(
         db=db_session,
@@ -100,21 +130,40 @@ def test_upload_commits_specification_and_endpoints(
     assert count_specifications(db_session) == 1
     assert count_endpoints(db_session) == 2
 
+    rag_indexing_orchestrator.index_specification.assert_called_once()
+
+    indexed_specification = (
+        rag_indexing_orchestrator.index_specification.call_args.args[0]
+    )
+
+    assert isinstance(indexed_specification, ApiSpecification)
+    assert indexed_specification.id == result.specification_id
+    assert indexed_specification.title == "Transaction Test API"
+    assert indexed_specification.version == "1.0.0"
+
 
 def test_upload_rolls_back_when_endpoint_creation_fails(
     db_session: Session,
     valid_openapi_content: bytes,
     monkeypatch: pytest.MonkeyPatch,
+    rag_indexing_orchestrator: MagicMock,
 ):
     """
     If endpoint persistence fails after the specification
     has been flushed, the entire transaction must roll back.
+
+    RAG indexing must not be triggered because the database
+    transaction never successfully committed.
     """
 
-    service = UploadService()
+    service = UploadService(
+        rag_indexing_orchestrator=rag_indexing_orchestrator,
+    )
 
     def fail_endpoint_creation(*args, **kwargs):
-        raise RuntimeError("Simulated endpoint persistence failure")
+        raise RuntimeError(
+            "Simulated endpoint persistence failure",
+        )
 
     monkeypatch.setattr(
         service.endpoint_service,
@@ -134,3 +183,5 @@ def test_upload_rolls_back_when_endpoint_creation_fails(
 
     assert count_specifications(db_session) == 0
     assert count_endpoints(db_session) == 0
+
+    rag_indexing_orchestrator.index_specification.assert_not_called()

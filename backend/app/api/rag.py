@@ -5,14 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.cache.dependencies import get_cache_service
-from app.cache.keys import (
-    build_rag_query_cache_key,
-    build_rag_query_cache_pattern,
-)
+from app.cache.keys import build_rag_query_cache_key
 from app.cache.service import CacheService
 from app.core.config import settings
 from app.database.session import get_db
-from app.rag.context_generator import ContextGenerator
 from app.rag.dependencies import RAGDependencies, get_rag_dependencies
 from app.schemas.rag import (
     RAGIndexResponse,
@@ -31,7 +27,6 @@ router = APIRouter(
 )
 
 specification_service = ApiSpecificationService()
-context_generator = ContextGenerator()
 
 
 @router.post(
@@ -46,11 +41,19 @@ def index_specification(
         RAGDependencies,
         Depends(get_rag_dependencies),
     ],
-    cache: Annotated[
-        CacheService,
-        Depends(get_cache_service),
-    ],
 ) -> RAGIndexResponse:
+    """
+    Replace the existing RAG index for an API specification.
+
+    The RAG indexing orchestrator owns:
+    - context generation,
+    - stale-vector deletion,
+    - document indexing,
+    - vector-store persistence,
+    - cache invalidation,
+    - and indexing statistics.
+    """
+
     specification = specification_service.get(
         db,
         specification_id,
@@ -62,37 +65,24 @@ def index_specification(
             detail=f"API specification with ID {specification_id} was not found.",
         )
 
-    documents = context_generator.generate(specification)
-
-    chunks_indexed = sum(
-        dependencies.indexing_service.index_document(document) for document in documents
-    )
-
-    dependencies.persistence.save()
-
-    # Invalidate cached RAG queries for this specification.
-    cache_pattern = build_rag_query_cache_pattern(
-        specification_id=specification_id,
-    )
-
-    deleted_cache_entries = cache.delete_pattern(
-        cache_pattern,
+    indexing_result = dependencies.indexing_orchestrator.index_specification(
+        specification,
     )
 
     logger.info(
-        "RAG specification indexed",
+        "RAG specification indexing request completed",
         extra={
-            "specification_id": specification_id,
-            "documents_indexed": len(documents),
-            "chunks_indexed": chunks_indexed,
-            "cache_entries_invalidated": deleted_cache_entries,
+            "specification_id": indexing_result.specification_id,
+            "documents_indexed": indexing_result.documents_indexed,
+            "chunks_indexed": indexing_result.chunks_indexed,
+            "cache_entries_invalidated": (indexing_result.cache_entries_invalidated),
         },
     )
 
     return RAGIndexResponse(
-        specification_id=specification_id,
-        documents_indexed=len(documents),
-        chunks_indexed=chunks_indexed,
+        specification_id=indexing_result.specification_id,
+        documents_indexed=indexing_result.documents_indexed,
+        chunks_indexed=indexing_result.chunks_indexed,
     )
 
 
@@ -111,6 +101,13 @@ def query_rag(
         Depends(get_cache_service),
     ],
 ) -> RAGQueryResponse:
+    """
+    Query the indexed API context.
+
+    Results are served from Redis when available and otherwise
+    retrieved from the configured vector store.
+    """
+
     total_timer = Timer()
     total_timer.start()
 
