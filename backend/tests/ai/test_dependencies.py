@@ -3,6 +3,8 @@ from unittest.mock import MagicMock
 import pytest
 from app.ai.dependencies import AIDependencies, build_ai_dependencies
 from app.ai.deterministic_provider import DeterministicLLMProvider
+from app.ai.fallback_provider import FallbackLLMProvider
+from app.ai.gemini_provider import GeminiLLMProvider
 from app.ai.groq_provider import GroqLLMProvider
 from app.ai.llm_test_case_generator import LLMTestCaseGenerator
 from app.ai.prompt_builder import GroundedPromptBuilder
@@ -97,6 +99,7 @@ def test_build_ai_dependencies_uses_groq_provider() -> None:
         LLM_PROVIDER="groq",
         GROQ_API_KEY="test-api-key",
         GROQ_MODEL="test-model",
+        LLM_FALLBACK_ENABLED=False,
         _env_file=None,  # pyright: ignore[reportCallIssue]
     )
 
@@ -122,6 +125,7 @@ def test_build_ai_dependencies_passes_llm_timeout_to_groq_provider() -> None:
         GROQ_API_KEY="test-api-key",
         GROQ_MODEL="test-model",
         LLM_TIMEOUT_SECONDS=10.0,
+        LLM_FALLBACK_ENABLED=False,
         _env_file=None,  # pyright: ignore[reportCallIssue]
     )
 
@@ -148,6 +152,7 @@ def test_build_ai_dependencies_uses_llm_test_case_generator_for_groq() -> None:
         LLM_PROVIDER="groq",
         GROQ_API_KEY="test-api-key",
         GROQ_MODEL="test-model",
+        LLM_FALLBACK_ENABLED=False,
         _env_file=None,  # pyright: ignore[reportCallIssue]
     )
 
@@ -202,3 +207,111 @@ def test_build_ai_dependencies_rejects_unsupported_provider() -> None:
             settings=settings,
             rag_dependencies=rag_dependencies,
         )
+
+
+def test_build_ai_dependencies_wraps_groq_with_gemini_fallback() -> None:
+    settings = Settings(
+        LLM_PROVIDER="groq",
+        GROQ_API_KEY="test-groq-api-key",
+        GROQ_MODEL="test-groq-model",
+        GEMINI_API_KEY="test-gemini-api-key",
+        GEMINI_MODEL="test-gemini-model",
+        LLM_FALLBACK_ENABLED=True,
+        LLM_FALLBACK_PROVIDER="gemini",
+        _env_file=None,  # pyright: ignore[reportCallIssue]
+    )
+
+    retrieval_service = MagicMock(spec=RAGRetrievalService)
+
+    rag_dependencies = MagicMock(spec=RAGDependencies)
+    rag_dependencies.retrieval_service = retrieval_service
+
+    dependencies = build_ai_dependencies(
+        settings=settings,
+        rag_dependencies=rag_dependencies,
+    )
+
+    assert isinstance(
+        dependencies.llm_provider,
+        FallbackLLMProvider,
+    )
+
+    assert isinstance(
+        dependencies.llm_provider._primary_provider,
+        GroqLLMProvider,
+    )
+
+    assert isinstance(
+        dependencies.llm_provider._fallback_provider,
+        GeminiLLMProvider,
+    )
+
+
+def test_build_ai_dependencies_disables_primary_groq_retries_when_fallback_enabled() -> (
+    None
+):
+    settings = Settings(
+        LLM_PROVIDER="groq",
+        GROQ_API_KEY="test-groq-api-key",
+        GROQ_MODEL="test-groq-model",
+        GEMINI_API_KEY="test-gemini-api-key",
+        GEMINI_MODEL="test-gemini-model",
+        LLM_MAX_RETRIES=2,
+        LLM_RETRY_BACKOFF_SECONDS=1.0,
+        LLM_FALLBACK_ENABLED=True,
+        LLM_FALLBACK_PROVIDER="gemini",
+        _env_file=None,  # pyright: ignore[reportCallIssue]
+    )
+
+    retrieval_service = MagicMock(spec=RAGRetrievalService)
+
+    rag_dependencies = MagicMock(spec=RAGDependencies)
+    rag_dependencies.retrieval_service = retrieval_service
+
+    dependencies = build_ai_dependencies(
+        settings=settings,
+        rag_dependencies=rag_dependencies,
+    )
+
+    assert isinstance(
+        dependencies.llm_provider,
+        FallbackLLMProvider,
+    )
+
+    primary_provider = dependencies.llm_provider._primary_provider
+
+    assert isinstance(
+        primary_provider,
+        GroqLLMProvider,
+    )
+
+    assert primary_provider._max_retries == 0
+
+
+def test_build_ai_dependencies_preserves_groq_retries_when_fallback_disabled() -> None:
+    settings = Settings(
+        LLM_PROVIDER="groq",
+        GROQ_API_KEY="test-groq-api-key",
+        GROQ_MODEL="test-groq-model",
+        LLM_MAX_RETRIES=2,
+        LLM_RETRY_BACKOFF_SECONDS=1.0,
+        LLM_FALLBACK_ENABLED=False,
+        _env_file=None,  # pyright: ignore[reportCallIssue]
+    )
+
+    retrieval_service = MagicMock(spec=RAGRetrievalService)
+
+    rag_dependencies = MagicMock(spec=RAGDependencies)
+    rag_dependencies.retrieval_service = retrieval_service
+
+    dependencies = build_ai_dependencies(
+        settings=settings,
+        rag_dependencies=rag_dependencies,
+    )
+
+    assert isinstance(
+        dependencies.llm_provider,
+        GroqLLMProvider,
+    )
+
+    assert dependencies.llm_provider._max_retries == 2

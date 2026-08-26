@@ -63,6 +63,10 @@ class Settings(BaseSettings):
         alias="LOG_LEVEL",
     )
 
+    # ------------------------------------------------------------------
+    # RAG
+    # ------------------------------------------------------------------
+
     rag_embedding_model: str = Field(
         default="sentence-transformers/all-MiniLM-L6-v2",
         alias="RAG_EMBEDDING_MODEL",
@@ -85,6 +89,10 @@ class Settings(BaseSettings):
         alias="RAG_RETRIEVAL_LIMIT",
     )
 
+    # ------------------------------------------------------------------
+    # LLM
+    # ------------------------------------------------------------------
+
     llm_provider: str = Field(
         default="deterministic",
         alias="LLM_PROVIDER",
@@ -98,6 +106,30 @@ class Settings(BaseSettings):
     groq_model: str = Field(
         default="openai/gpt-oss-20b",
         alias="GROQ_MODEL",
+    )
+
+    gemini_api_key: str | None = Field(
+        default=None,
+        alias="GEMINI_API_KEY",
+    )
+
+    gemini_model: str = Field(
+        default="gemini-3.6-flash",
+        alias="GEMINI_MODEL",
+    )
+
+    # ------------------------------------------------------------------
+    # LLM fallback
+    # ------------------------------------------------------------------
+
+    llm_fallback_enabled: bool = Field(
+        default=True,
+        alias="LLM_FALLBACK_ENABLED",
+    )
+
+    llm_fallback_provider: str = Field(
+        default="gemini",
+        alias="LLM_FALLBACK_PROVIDER",
     )
 
     llm_timeout_seconds: float = Field(
