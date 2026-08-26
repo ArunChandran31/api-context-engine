@@ -88,6 +88,34 @@ def test_requests_structured_json_response_format() -> None:
     assert provider.last_request.response_format is not None
     assert provider.last_request.response_format["type"] == "json_schema"
 
+    response_format = provider.last_request.response_format
+
+    assert response_format["type"] == "json_schema"
+
+    json_schema = response_format["json_schema"]
+
+    assert json_schema["name"] == "api_test_cases"
+    assert json_schema["strict"] is True
+
+    schema = json_schema["schema"]
+
+    assert schema["type"] == "object"
+    assert schema["required"] == ["test_cases"]
+    assert schema["additionalProperties"] is False
+
+    test_cases_schema = schema["properties"]["test_cases"]
+
+    assert test_cases_schema["type"] == "array"
+
+    item_schema = test_cases_schema["items"]
+
+    assert item_schema["type"] == "object"
+    assert item_schema["required"] == [
+        "category",
+        "description",
+    ]
+    assert item_schema["additionalProperties"] is False
+
 
 def test_rejects_empty_prompt() -> None:
     provider = FakeLLMProvider(

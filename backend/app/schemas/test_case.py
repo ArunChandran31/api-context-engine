@@ -2,7 +2,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.ai.test_case_models import GeneratedTestCase
+from app.ai.test_case_models import (
+    GeneratedTestCase,
+    SkippedTestCategory,
+)
 
 TestStyle = Literal[
     "jest",
@@ -11,12 +14,13 @@ TestStyle = Literal[
     "curl",
 ]
 
+
 TestCategory = Literal[
     "happy",
     "validation",
     "edge",
     "auth",
-    "other",
+    "errors",
 ]
 
 
@@ -44,7 +48,7 @@ class TestCaseGenerationRequest(BaseModel):
             "validation",
             "edge",
             "auth",
-            "other",
+            "errors",
         ],
         description="Categories of test cases to generate.",
     )
@@ -54,3 +58,6 @@ class TestCaseGenerationResponse(BaseModel):
     __test__ = False
 
     test_cases: list[GeneratedTestCase]
+    skipped_categories: list[SkippedTestCategory] = Field(
+        default_factory=list,
+    )

@@ -1,12 +1,9 @@
-from functools import lru_cache
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.ai.dependencies import (
-    AIDependencies,
-    build_ai_dependencies,
-)
+from app.ai.dependencies import AIDependencies
+from app.ai.runtime import get_ai_dependencies
 from app.schemas.test_case import (
     TestCaseGenerationRequest,
     TestCaseGenerationResponse,
@@ -16,11 +13,6 @@ router = APIRouter(
     prefix="/ai",
     tags=["AI"],
 )
-
-
-@lru_cache
-def get_ai_dependencies() -> AIDependencies:
-    return build_ai_dependencies()
 
 
 @router.post(
@@ -34,13 +26,24 @@ def generate_test_cases(
         Depends(get_ai_dependencies),
     ],
 ) -> TestCaseGenerationResponse:
-    result = dependencies.test_case_generation_service.generate(
-        endpoint=request.question,
-        specification_id=request.specification_id,
-        test_style=request.test_style,
-        categories=request.categories,
-    )
+    try:
+        result = dependencies.test_case_generation_service.generate(
+            endpoint=request.question,
+            specification_id=request.specification_id,
+            test_style=request.test_style,
+            categories=request.categories,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error": "Test case generation failed validation.",
+                "message": str(exc),
+            },
+        ) from exc
 
     return TestCaseGenerationResponse(
         test_cases=result.test_cases,
+        skipped_categories=result.skipped_categories,
     )

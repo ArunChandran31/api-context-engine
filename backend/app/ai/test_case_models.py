@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 TestStyle = Literal[
@@ -8,12 +8,13 @@ TestStyle = Literal[
     "curl",
 ]
 
+
 TestCategory = Literal[
     "happy",
     "validation",
     "edge",
     "auth",
-    "other",
+    "errors",
 ]
 
 
@@ -42,10 +43,26 @@ class GeneratedTestCase:
 
 
 @dataclass(frozen=True)
+class SkippedTestCategory:
+    category: TestCategory
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.category.strip():
+            raise ValueError("Skipped test category cannot be empty.")
+
+        if not self.reason.strip():
+            raise ValueError("Skipped test category reason cannot be empty.")
+
+
+@dataclass(frozen=True)
 class TestCaseGenerationResult:
     __test__ = False
 
     test_cases: list[GeneratedTestCase]
+    skipped_categories: list[SkippedTestCategory] = field(
+        default_factory=list,
+    )
 
     def __post_init__(self) -> None:
         if not self.test_cases:
