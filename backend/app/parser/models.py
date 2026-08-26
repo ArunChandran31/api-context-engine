@@ -34,4 +34,5 @@ class ParsedSpecification:
     title: str
     version: str | None
     description: str | None
+    base_url: str | None
     endpoints: list[ParsedEndpoint]

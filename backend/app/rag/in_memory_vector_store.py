@@ -68,6 +68,30 @@ class InMemoryVectorStore(VectorStore):
         del self._records[record_id]
         return True
 
+    def delete_by_specification_id(
+        self,
+        specification_id: int,
+    ) -> int:
+        """
+        Delete all vector records belonging to a specification.
+
+        Returns the number of deleted records.
+        """
+
+        if specification_id <= 0:
+            raise ValueError("Specification ID must be greater than zero.")
+
+        records_to_delete = [
+            record_id
+            for record_id, record in self._records.items()
+            if record.metadata.get("specification_id") == specification_id
+        ]
+
+        for record_id in records_to_delete:
+            del self._records[record_id]
+
+        return len(records_to_delete)
+
     def clear(self) -> None:
         self._records.clear()
 
@@ -96,6 +120,7 @@ class InMemoryVectorStore(VectorStore):
         )
 
         first_norm = math.sqrt(sum(value * value for value in first))
+
         second_norm = math.sqrt(sum(value * value for value in second))
 
         if first_norm == 0.0 or second_norm == 0.0:

@@ -40,10 +40,14 @@ class ApiSpecificationService:
             title=specification.title,
             version=specification.version,
             description=specification.description,
+            base_url=specification.base_url,
             source_file=specification.source_file,
         )
 
-        return self.repository.add(db, entity)
+        return self.repository.add(
+            db,
+            entity,
+        )
 
     def create(
         self,
@@ -86,3 +90,27 @@ class ApiSpecificationService:
         db: Session,
     ) -> list[ApiSpecification]:
         return self.repository.get_all(db)
+
+    def update_from_parsed(
+        self,
+        specification: ApiSpecification,
+        *,
+        title: str,
+        version: str | None,
+        description: str | None,
+        base_url: str | None,
+        source_file: str,
+    ) -> ApiSpecification:
+        """
+        Update specification metadata inside the current transaction.
+
+        This method does NOT commit or rollback.
+        """
+
+        specification.title = title
+        specification.version = version
+        specification.description = description
+        specification.base_url = base_url
+        specification.source_file = source_file
+
+        return specification

@@ -35,6 +35,11 @@ class ApiSpecification(Base):
         nullable=True,
     )
 
+    base_url: Mapped[str | None] = mapped_column(
+        String(2048),
+        nullable=True,
+    )
+
     source_file: Mapped[str] = mapped_column(
         String(255),
         nullable=False,

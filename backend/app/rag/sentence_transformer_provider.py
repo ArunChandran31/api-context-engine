@@ -36,6 +36,15 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProvider):
 
         return int(dimension)
 
+    def warm_up(self) -> None:
+        """
+        Load the Sentence Transformer model into memory.
+
+        This is intended to be called during application startup so
+        the first embedding request does not pay the model-loading cost.
+        """
+        self._get_model()
+
     def embed(self, text: str) -> list[float]:
         if not text.strip():
             raise ValueError("Text cannot be empty.")

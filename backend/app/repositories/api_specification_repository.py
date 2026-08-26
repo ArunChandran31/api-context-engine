@@ -18,7 +18,9 @@ class ApiSpecificationRepository(BaseRepository[ApiSpecification]):
         db: Session,
         title: str,
     ) -> ApiSpecification | None:
-        statement = select(ApiSpecification).where(ApiSpecification.title == title)
+        statement = select(ApiSpecification).where(
+            ApiSpecification.title == title,
+        )
 
         return db.scalar(statement)
 
@@ -27,7 +29,13 @@ class ApiSpecificationRepository(BaseRepository[ApiSpecification]):
         db: Session,
         title: str,
     ) -> bool:
-        return self.get_by_title(db, title) is not None
+        return (
+            self.get_by_title(
+                db,
+                title,
+            )
+            is not None
+        )
 
     def get_latest(
         self,
@@ -47,7 +55,9 @@ class ApiSpecificationRepository(BaseRepository[ApiSpecification]):
         keyword: str,
     ) -> list[ApiSpecification]:
         statement = select(ApiSpecification).where(
-            ApiSpecification.title.ilike(f"%{keyword}%")
+            ApiSpecification.title.ilike(
+                f"%{keyword}%",
+            ),
         )
 
         return list(db.scalars(statement).all())

@@ -79,6 +79,9 @@ class ContextGenerator:
         if specification.version:
             sections.append(f"Version: {specification.version}")
 
+        if specification.base_url:
+            sections.append(f"Base URL: {specification.base_url}")
+
         sections.append(f"Endpoint: {endpoint.method.upper()} {endpoint.path}")
 
         if endpoint.summary:

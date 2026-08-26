@@ -82,6 +82,17 @@ class VectorStore(ABC):
         """
 
     @abstractmethod
+    def delete_by_specification_id(
+        self,
+        specification_id: int,
+    ) -> int:
+        """
+        Delete all vector records belonging to a specification.
+
+        Returns the number of deleted records.
+        """
+
+    @abstractmethod
     def clear(self) -> None:
         """
         Remove all records from the store.

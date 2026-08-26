@@ -59,6 +59,39 @@ def test_generate_endpoint_documents() -> None:
     assert first.metadata["source_file"] == "users.yaml"
 
 
+def test_generate_includes_base_url() -> None:
+    specification = ApiSpecification(
+        id=1,
+        title="Product API",
+        version="1.0.0",
+        description="Product API with a documented server URL.",
+        source_file="product-api.yaml",
+        base_url="http://127.0.0.1:8000",
+    )
+
+    specification.endpoints = [
+        Endpoint(
+            id=10,
+            api_specification_id=1,
+            path="/products/{product_id}",
+            method="post",
+            summary="Replace product",
+            operation_id="replaceProduct",
+        )
+    ]
+
+    generator = ContextGenerator()
+
+    documents = generator.generate(specification)
+
+    assert len(documents) == 1
+
+    content = documents[0].content
+
+    assert "Base URL: http://127.0.0.1:8000" in content
+    assert "Endpoint: POST /products/{product_id}" in content
+
+
 def test_generate_includes_rich_endpoint_metadata() -> None:
     specification = ApiSpecification(
         id=1,

@@ -37,6 +37,24 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("Database initialized successfully.")
 
+    # Preload the RAG embedding model during application startup.
+    # This prevents the first AI request from paying the model-loading
+    # cost (~80+ seconds in the current environment).
+    try:
+        from app.rag.dependencies import get_rag_dependencies
+
+        rag_dependencies = get_rag_dependencies()
+
+        logger.info("Loading RAG embedding model...")
+
+        rag_dependencies.embedding_provider.warm_up()
+
+        logger.info("RAG embedding model loaded successfully.")
+
+    except Exception:
+        logger.exception("Failed to preload RAG embedding model.")
+        raise
+
     yield
 
     logger.info("Shutting down %s...", settings.app_name)

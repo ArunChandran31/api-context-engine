@@ -25,7 +25,10 @@ class RAGIndexingService:
         self._embedding_provider = embedding_provider
         self._vector_store = vector_store
 
-    def index_document(self, document: RAGDocument) -> int:
+    def index_document(
+        self,
+        document: RAGDocument,
+    ) -> int:
         """
         Chunk, embed, and store a RAG document.
 
@@ -82,7 +85,9 @@ class RAGIndexingService:
         )
 
     @staticmethod
-    def _build_record_id(chunk: RAGChunk) -> str:
+    def _build_record_id(
+        chunk: RAGChunk,
+    ) -> str:
         endpoint_part = (
             str(chunk.endpoint_id) if chunk.endpoint_id is not None else "specification"
         )
@@ -91,4 +96,21 @@ class RAGIndexingService:
             f"spec:{chunk.specification_id}:"
             f"endpoint:{endpoint_part}:"
             f"chunk:{chunk.chunk_index}"
+        )
+
+    def delete_specification(
+        self,
+        specification_id: int,
+    ) -> int:
+        """
+        Delete all indexed chunks belonging to a specification.
+
+        Returns the number of deleted chunks.
+        """
+
+        if specification_id <= 0:
+            raise ValueError("Specification ID must be greater than zero.")
+
+        return self._vector_store.delete_by_specification_id(
+            specification_id,
         )
