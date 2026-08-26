@@ -1,12 +1,9 @@
-from functools import lru_cache
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.ai.dependencies import (
-    AIDependencies,
-    build_ai_dependencies,
-)
+from app.ai.dependencies import AIDependencies
+from app.ai.runtime import get_ai_dependencies
 from app.schemas.debug import (
     DebugRequest,
     DebugResponse,
@@ -16,11 +13,6 @@ router = APIRouter(
     prefix="/ai",
     tags=["AI"],
 )
-
-
-@lru_cache
-def get_ai_dependencies() -> AIDependencies:
-    return build_ai_dependencies()
 
 
 @router.post(
