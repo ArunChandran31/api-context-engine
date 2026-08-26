@@ -10,7 +10,7 @@ from app.exceptions import (
     SpecificationParseError,
     UnsupportedFileTypeError,
 )
-from app.rag.dependencies import get_rag_dependencies
+from app.rag.dependencies import RAGDependencies, get_rag_dependencies
 from app.schemas.upload import UploadResponse
 from app.services.upload_service import UploadService
 
@@ -20,20 +20,18 @@ router = APIRouter(
 )
 
 
-def build_upload_service() -> UploadService:
+def get_upload_service(
+    rag_dependencies: RAGDependencies,
+) -> UploadService:
     """
-    Build the upload service with the application's
-    shared RAG indexing orchestrator.
+    Build the upload service from the application's
+    shared RAG dependency graph.
     """
-
-    rag_dependencies = get_rag_dependencies()
 
     return UploadService(
         rag_indexing_orchestrator=rag_dependencies.indexing_orchestrator,
     )
 
-
-upload_service = build_upload_service()
 
 ALLOWED_EXTENSIONS = {
     ".json",
@@ -50,10 +48,16 @@ ALLOWED_EXTENSIONS = {
 async def upload_specification(
     file: Annotated[UploadFile, File()],
     db: Annotated[Session, Depends(get_db)],
+    rag_dependencies: Annotated[
+        RAGDependencies,
+        Depends(get_rag_dependencies),
+    ],
 ):
     """
     Upload and ingest an OpenAPI JSON or YAML specification.
     """
+
+    upload_service = get_upload_service(rag_dependencies)
 
     filename = file.filename
 
