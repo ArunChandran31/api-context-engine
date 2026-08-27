@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+
 import type { Page } from '../utils'
 import { CARD, BTN_PRIMARY, INPUT_STYLE } from '../utils'
 import {
@@ -30,6 +33,220 @@ function Code({ children }: { children: string }) {
   )
 }
 
+/**
+ * Render AI-generated Markdown as properly formatted UI.
+ *
+ * The backend intentionally returns structured Markdown containing:
+ * - headings
+ * - bold text
+ * - bullet lists
+ * - numbered lists
+ * - inline code
+ * - fenced code blocks
+ * - tables
+ * - horizontal separators
+ *
+ * ReactMarkdown converts that Markdown into normal React elements
+ * instead of displaying the Markdown syntax literally.
+ */
+function MarkdownContent({ children }: { children: string }) {
+  return (
+    <div className="text-[14px] text-[#1a1a1a] leading-relaxed">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h1: ({ children }) => (
+            <h1 className="text-[20px] font-semibold text-[#111] mt-1 mb-4">
+              {children}
+            </h1>
+          ),
+
+          h2: ({ children }) => (
+            <h2 className="text-[17px] font-semibold text-[#111] mt-6 mb-3">
+              {children}
+            </h2>
+          ),
+
+          h3: ({ children }) => (
+            <h3 className="text-[15px] font-semibold text-[#222] mt-5 mb-2">
+              {children}
+            </h3>
+          ),
+
+          p: ({ children }) => (
+            <p className="mb-3 last:mb-0">
+              {children}
+            </p>
+          ),
+
+          ul: ({ children }) => (
+            <ul className="list-disc pl-5 mb-4 space-y-1">
+              {children}
+            </ul>
+          ),
+
+          ol: ({ children }) => (
+            <ol className="list-decimal pl-5 mb-4 space-y-1">
+              {children}
+            </ol>
+          ),
+
+          li: ({ children }) => (
+            <li className="pl-1">
+              {children}
+            </li>
+          ),
+
+          strong: ({ children }) => (
+            <strong className="font-semibold text-[#111]">
+              {children}
+            </strong>
+          ),
+
+          em: ({ children }) => (
+            <em className="italic text-[#333]">
+              {children}
+            </em>
+          ),
+
+          blockquote: ({ children }) => (
+            <blockquote
+              className="border-l-4 pl-4 my-4 text-[#666]"
+              style={{
+                borderColor: 'rgba(0,0,0,0.12)',
+              }}
+            >
+              {children}
+            </blockquote>
+          ),
+
+          hr: () => (
+            <hr
+              className="my-5"
+              style={{
+                border: 0,
+                borderTop: '1px solid rgba(0,0,0,0.08)',
+              }}
+            />
+          ),
+
+          a: ({ children, href }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[#2563eb] underline underline-offset-2"
+            >
+              {children}
+            </a>
+          ),
+
+          code: ({ children, className }) => {
+            const isInline = !className
+
+            if (isInline) {
+              return (
+                <code
+                  className="px-1.5 py-0.5 rounded-md text-[12px]"
+                  style={{
+                    background: '#f3f3f3',
+                    border: '1px solid rgba(0,0,0,0.06)',
+                    fontFamily: 'JetBrains Mono, monospace',
+                  }}
+                >
+                  {children}
+                </code>
+              )
+            }
+
+            return (
+              <code
+                className="block text-[12px] leading-relaxed overflow-x-auto"
+                style={{
+                  fontFamily: 'JetBrains Mono, monospace',
+                }}
+              >
+                {children}
+              </code>
+            )
+          },
+
+          pre: ({ children }) => (
+            <pre
+              className="rounded-[12px] p-4 my-4 overflow-x-auto"
+              style={{
+                background: '#f5f5f5',
+                border: '1px solid rgba(0,0,0,0.06)',
+              }}
+            >
+              {children}
+            </pre>
+          ),
+
+          table: ({ children }) => (
+            <div className="overflow-x-auto my-4">
+              <table
+                className="w-full text-[13px]"
+                style={{
+                  borderCollapse: 'collapse',
+                }}
+              >
+                {children}
+              </table>
+            </div>
+          ),
+
+          thead: ({ children }) => (
+            <thead
+              style={{
+                background: '#f5f5f5',
+              }}
+            >
+              {children}
+            </thead>
+          ),
+
+          tbody: ({ children }) => (
+            <tbody>
+              {children}
+            </tbody>
+          ),
+
+          tr: ({ children }) => (
+            <tr>
+              {children}
+            </tr>
+          ),
+
+          th: ({ children }) => (
+            <th
+              className="text-left font-semibold px-3 py-2"
+              style={{
+                border: '1px solid rgba(0,0,0,0.08)',
+              }}
+            >
+              {children}
+            </th>
+          ),
+
+          td: ({ children }) => (
+            <td
+              className="px-3 py-2"
+              style={{
+                border: '1px solid rgba(0,0,0,0.08)',
+              }}
+            >
+              {children}
+            </td>
+          ),
+        }}
+      >
+        {children}
+      </ReactMarkdown>
+    </div>
+  )
+}
+
 export default function DebugAssistant({ navigate }: Props) {
   const [specifications, setSpecifications] = useState<
     ApiSpecification[]
@@ -58,6 +275,7 @@ export default function DebugAssistant({ navigate }: Props) {
   const [result, setResult] = useState<DebugResponse | null>(null)
 
   const [analyzing, setAnalyzing] = useState(false)
+
   const [loadingSpecifications, setLoadingSpecifications] =
     useState(false)
 
@@ -414,6 +632,7 @@ export default function DebugAssistant({ navigate }: Props) {
                   >
                     <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18" />
                   </svg>
+
                   Analyze failure
                 </>
               )}
@@ -486,13 +705,14 @@ export default function DebugAssistant({ navigate }: Props) {
                 </div>
 
                 <div>
-                  <div className="text-[12px] text-[#aaa] mb-1.5">
+                  <div className="text-[12px] text-[#aaa] mb-2">
                     Explanation
                   </div>
 
-                  <div className="text-[14px] text-[#1a1a1a] leading-relaxed whitespace-pre-wrap">
+                  {/* Render the AI response as Markdown */}
+                  <MarkdownContent>
                     {result.explanation}
-                  </div>
+                  </MarkdownContent>
                 </div>
               </div>
 
