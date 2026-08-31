@@ -64,9 +64,11 @@ backend/htmlcov/
 # SQLite Databases
 # ==========================================================
 
-backend/*.db
-backend/*.sqlite
-backend/*.sqlite3
+*.db
+*.sqlite
+*.sqlite3
+*.db.backup
+*.db.before-user-auth
 
 # ==========================================================
 # Logs
@@ -134,6 +136,7 @@ docker-data/
 
 coverage/
 .coverage
+backend/pytest-output.txt
 
 # ==========================================================
 # Temporary Files
@@ -166,6 +169,7 @@ coverage/
 
 .envrc
 .cache/
+
 # ==========================================================
 # RAG / Vector Store Runtime Data
 # ==========================================================
