@@ -1,10 +1,21 @@
 from pydantic import BaseModel
 
 
+class UploadRAGResponse(BaseModel):
+    """
+    RAG indexing statistics returned after successfully
+    indexing an uploaded OpenAPI specification.
+    """
+
+    documents_indexed: int
+    chunks_indexed: int
+    cache_entries_invalidated: int
+
+
 class UploadResponse(BaseModel):
     """
     Response returned after successfully ingesting
-    an OpenAPI specification.
+    and indexing an OpenAPI specification.
     """
 
     specification_id: int
@@ -12,3 +23,4 @@ class UploadResponse(BaseModel):
     version: str | None = None
     endpoints_created: int
     filename: str
+    rag: UploadRAGResponse

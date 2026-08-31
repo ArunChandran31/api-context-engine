@@ -127,6 +127,28 @@ class FAISSVectorStore(VectorStore, VectorStorePersistence):
 
         return True
 
+    def delete_by_specification_id(
+        self,
+        specification_id: int,
+    ) -> int:
+        if specification_id <= 0:
+            raise ValueError("Specification ID must be greater than zero.")
+
+        original_count = len(self._records)
+
+        self._records = [
+            record
+            for record in self._records
+            if record.metadata.get("specification_id") != specification_id
+        ]
+
+        deleted_count = original_count - len(self._records)
+
+        if deleted_count > 0:
+            self._rebuild_index()
+
+        return deleted_count
+
     def clear(self) -> None:
         self._records.clear()
         self._index = faiss.IndexFlatIP(self._dimension)

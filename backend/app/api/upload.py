@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.core.auth import AuthenticatedUser, get_current_user
 from app.database.session import get_db
 from app.exceptions import (
     EmptyUploadError,
@@ -10,6 +11,7 @@ from app.exceptions import (
     SpecificationParseError,
     UnsupportedFileTypeError,
 )
+from app.rag.dependencies import RAGDependencies, get_rag_dependencies
 from app.schemas.upload import UploadResponse
 from app.services.upload_service import UploadService
 
@@ -18,7 +20,14 @@ router = APIRouter(
     tags=["Upload"],
 )
 
-upload_service = UploadService()
+
+def get_upload_service(
+    rag_dependencies: RAGDependencies,
+) -> UploadService:
+    return UploadService(
+        rag_indexing_orchestrator=rag_dependencies.indexing_orchestrator,
+    )
+
 
 ALLOWED_EXTENSIONS = {
     ".json",
@@ -27,21 +36,9 @@ ALLOWED_EXTENSIONS = {
 }
 
 
-@router.post(
-    "",
-    response_model=UploadResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def upload_specification(
-    file: Annotated[UploadFile, File()],
-    db: Annotated[Session, Depends(get_db)],
-):
-    """
-    Upload and ingest an OpenAPI JSON or YAML specification.
-    """
-
-    filename = file.filename
-
+def validate_filename(
+    filename: str | None,
+) -> str:
     if not filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -56,6 +53,32 @@ async def upload_specification(
             detail="Only JSON, YAML, and YML files are supported.",
         )
 
+    return filename
+
+
+@router.post(
+    "",
+    response_model=UploadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_specification(
+    file: Annotated[UploadFile, File()],
+    db: Annotated[Session, Depends(get_db)],
+    rag_dependencies: Annotated[
+        RAGDependencies,
+        Depends(get_rag_dependencies),
+    ],
+    current_user: Annotated[
+        AuthenticatedUser,
+        Depends(get_current_user),
+    ],
+):
+    upload_service = get_upload_service(
+        rag_dependencies,
+    )
+
+    filename = validate_filename(file.filename)
+
     try:
         content = await file.read()
 
@@ -63,6 +86,7 @@ async def upload_specification(
             db=db,
             content=content,
             filename=filename,
+            user=current_user,
         )
 
     except EmptyUploadError as exc:
@@ -86,5 +110,68 @@ async def upload_specification(
     except SpecificationAlreadyExistsError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+
+@router.put(
+    "/{specification_id}",
+    response_model=UploadResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def replace_specification(
+    specification_id: int,
+    file: Annotated[UploadFile, File()],
+    db: Annotated[Session, Depends(get_db)],
+    rag_dependencies: Annotated[
+        RAGDependencies,
+        Depends(get_rag_dependencies),
+    ],
+    current_user: Annotated[
+        AuthenticatedUser,
+        Depends(get_current_user),
+    ],
+):
+    upload_service = get_upload_service(
+        rag_dependencies,
+    )
+
+    filename = validate_filename(file.filename)
+
+    try:
+        content = await file.read()
+
+        return upload_service.replace(
+            db=db,
+            specification_id=specification_id,
+            content=content,
+            filename=filename,
+            user=current_user,
+        )
+
+    except ValueError as exc:
+        if "was not found" in str(exc):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+
+        raise
+
+    except EmptyUploadError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    except UnsupportedFileTypeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
+        ) from exc
+
+    except SpecificationParseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc

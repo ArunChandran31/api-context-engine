@@ -27,6 +27,11 @@ def extract_specification(
     title = info.get("title", "Untitled API")
     version = info.get("version")
     description = info.get("description")
+    servers = specification.get("servers", [])
+    base_url = None
+
+    if servers and isinstance(servers[0], dict):
+        base_url = servers[0].get("url")
 
     endpoints: list[ParsedEndpoint] = []
 
@@ -64,5 +69,6 @@ def extract_specification(
         title=title,
         version=version,
         description=description,
+        base_url=base_url,
         endpoints=endpoints,
     )

@@ -9,6 +9,7 @@ import { CARD, INPUT_STYLE, MethodBadge, methodColors } from '../utils'
 
 interface Props {
   navigate: (p: Page, data?: unknown) => void
+  data?: unknown
 }
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -57,7 +58,18 @@ function toEndpointViewModel(endpoint: ApiEndpoint) {
   }
 }
 
-export default function APIExplorer({ navigate }: Props) {
+export default function APIExplorer({ navigate, data }: Props) {
+  const navigationData =
+    data &&
+    typeof data === 'object' &&
+    !Array.isArray(data)
+      ? data as { specificationId?: number }
+      : undefined
+
+  const requestedSpecificationId =
+    typeof navigationData?.specificationId === 'number'
+      ? navigationData.specificationId
+      : null
   const [specifications, setSpecifications] = useState<ApiSpecification[]>([])
   const [selectedSpecificationId, setSelectedSpecificationId] = useState<
     number | null
@@ -89,7 +101,18 @@ export default function APIExplorer({ navigate }: Props) {
         setSpecifications(data)
 
         if (data.length > 0) {
-          setSelectedSpecificationId(data[0].id)
+          const requestedSpecificationExists =
+            requestedSpecificationId !== null &&
+            data.some(
+              (specification) =>
+                specification.id === requestedSpecificationId,
+            )
+
+          setSelectedSpecificationId(
+            requestedSpecificationExists
+              ? requestedSpecificationId
+              : data[0].id,
+          )
         }
       } catch (err) {
         if (cancelled) {
@@ -113,7 +136,7 @@ export default function APIExplorer({ navigate }: Props) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [requestedSpecificationId])
 
   useEffect(() => {
     if (selectedSpecificationId === null) {

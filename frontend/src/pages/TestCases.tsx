@@ -1,181 +1,210 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Page } from '../utils'
 import { CARD, BTN_PRIMARY, MethodBadge } from '../utils'
+import {
+  getSpecifications,
+  type ApiSpecification,
+} from '../api/specifications'
+import {
+  getEndpoints,
+  type ApiEndpoint,
+} from '../api/endpoints'
+import { generateTestCases } from '../api/testCases'
+import { incrementAIQueryCount } from '../utils/sessionMetrics'
 
-interface Props { navigate: (p: Page) => void }
+interface Props {
+  navigate: (p: Page) => void
+}
 
 type TestStyle = 'jest' | 'pytest' | 'postman' | 'curl'
-type TestCategory = 'happy' | 'validation' | 'edge' | 'auth'
+type TestCategory = 'happy' | 'validation' | 'edge' | 'auth' | 'errors'
 
 interface TestCase {
   id: string
   title: string
   category: TestCategory
-  input: string
-  expected: string
+  description: string
 }
 
-const ENDPOINTS = [
-  'GET /pets',
-  'POST /pets',
-  'GET /pets/{petId}',
-  'PUT /pets/{petId}',
-  'DELETE /pets/{petId}',
-  'POST /store/order',
-]
-
-const GENERATED: TestCase[] = [
-  {
-    id: 't1',
-    title: 'Successfully creates a pet with valid payload',
-    category: 'happy',
-    input: `POST /pets
-Content-Type: application/json
-
-{
-  "name": "Buddy",
-  "status": "available",
-  "category": { "id": 1, "name": "Dogs" }
-}`,
-    expected: `HTTP 201 Created
-{
-  "id": 42,
-  "name": "Buddy",
-  "status": "available"
-}`,
+const CATEGORY_META: Record<
+  TestCategory,
+  { label: string; color: string; textColor: string }
+> = {
+  happy: {
+    label: 'Happy path',
+    color: '#dcfce7',
+    textColor: '#15803d',
   },
-  {
-    id: 't2',
-    title: 'Returns 400 when name field is missing',
-    category: 'validation',
-    input: `POST /pets
-Content-Type: application/json
-
-{
-  "status": "available"
-}`,
-    expected: `HTTP 400 Bad Request
-{
-  "code": 400,
-  "message": "Validation Failed: name is required"
-}`,
+  validation: {
+    label: 'Validation',
+    color: '#fef3c7',
+    textColor: '#b45309',
   },
-  {
-    id: 't3',
-    title: 'Returns 400 for invalid status enum value',
-    category: 'validation',
-    input: `POST /pets
-Content-Type: application/json
-
-{
-  "name": "Buddy",
-  "status": "invalid_status"
-}`,
-    expected: `HTTP 400 Bad Request
-{
-  "code": 400,
-  "message": "Validation Failed: invalid enum value for status"
-}`,
+  edge: {
+    label: 'Edge case',
+    color: '#ede9fe',
+    textColor: '#6d28d9',
   },
-  {
-    id: 't4',
-    title: 'Handles extremely long name field (edge case)',
-    category: 'edge',
-    input: `POST /pets
-Content-Type: application/json
-
-{
-  "name": "${'A'.repeat(255)}",
-  "status": "available"
-}`,
-    expected: `HTTP 400 or 201
-Verify max-length constraint is enforced`,
+  auth: {
+    label: 'Auth',
+    color: '#fee2e2',
+    textColor: '#b91c1c',
   },
-  {
-    id: 't5',
-    title: 'Returns 401 when Authorization header is missing',
-    category: 'auth',
-    input: `POST /pets
-Content-Type: application/json
-# No Authorization header
-
-{
-  "name": "Buddy",
-  "status": "available"
-}`,
-    expected: `HTTP 401 Unauthorized
-{
-  "code": 401,
-  "message": "Unauthorized"
-}`,
+  errors: {
+    label: 'Errors',
+    color: '#f3f4f6',
+    textColor: '#4b5563',
   },
-]
+}
 
-const CATEGORY_META: Record<TestCategory, { label: string; color: string; textColor: string }> = {
-  happy: { label: 'Happy path', color: '#dcfce7', textColor: '#15803d' },
-  validation: { label: 'Validation', color: '#fef3c7', textColor: '#b45309' },
-  edge: { label: 'Edge case', color: '#ede9fe', textColor: '#6d28d9' },
-  auth: { label: 'Auth', color: '#fee2e2', textColor: '#b91c1c' },
+function normalizeCategory(category: string): TestCategory {
+  const value = category.toLowerCase().trim()
+
+  if (
+    value.includes('positive') ||
+    value.includes('happy') ||
+    value.includes('success')
+  ) {
+    return 'happy'
+  }
+
+  if (
+    value.includes('error') ||
+    value.includes('failure') ||
+    value.includes('server')
+  ) {
+    return 'errors'
+  }
+
+  if (
+    value.includes('negative') ||
+    value.includes('validation') ||
+    value.includes('invalid')
+  ) {
+    return 'validation'
+  }
+
+  if (
+    value.includes('edge') ||
+    value.includes('boundary')
+  ) {
+    return 'edge'
+  }
+
+  if (
+    value.includes('auth') ||
+    value.includes('authorization') ||
+    value.includes('authentication')
+  ) {
+    return 'auth'
+  }
+
+  return 'errors'
 }
 
 function TestCaseRow({ tc }: { tc: TestCase }) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+
   const meta = CATEGORY_META[tc.category]
 
-  function copy() {
-    navigator.clipboard?.writeText(tc.input + '\n\nExpected:\n' + tc.expected)
+  async function copy() {
+    await navigator.clipboard?.writeText(
+      `${tc.title}\n\n${tc.description}`,
+    )
+
     setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+
+    setTimeout(() => {
+      setCopied(false)
+    }, 1500)
   }
 
   return (
-    <div style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+    <div
+      style={{
+        borderBottom: '1px solid rgba(0,0,0,0.05)',
+      }}
+    >
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen((value) => !value)}
         className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-black/[0.015] transition-colors"
-        style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+        }}
       >
         <span
           className="text-[11px] font-medium px-2 py-0.5 rounded-full flex-shrink-0"
-          style={{ background: meta.color, color: meta.textColor }}
+          style={{
+            background: meta.color,
+            color: meta.textColor,
+          }}
         >
           {meta.label}
         </span>
-        <span className="text-[14px] text-[#1a1a1a] flex-1 text-left">{tc.title}</span>
+
+        <span className="text-[14px] text-[#1a1a1a] flex-1 text-left">
+          {tc.title}
+        </span>
+
         <svg
-          width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth={2} strokeLinecap="round"
-          style={{ transform: open ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 200ms', flexShrink: 0 }}
+          width={14}
+          height={14}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#aaa"
+          strokeWidth={2}
+          strokeLinecap="round"
+          style={{
+            transform: open
+              ? 'rotate(180deg)'
+              : 'rotate(0)',
+            transition: 'transform 200ms',
+            flexShrink: 0,
+          }}
         >
           <path d="M6 9l6 6 6-6" />
         </svg>
       </button>
 
       {open && (
-        <div className="px-5 pb-4 grid grid-cols-2 gap-3">
-          <div>
-            <div className="text-[11px] text-[#aaa] mb-1.5">Input / request</div>
-            <pre
-              className="rounded-[12px] p-3 text-[11px] overflow-x-auto leading-relaxed"
-              style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'pre-wrap' }}
-            >
-              {tc.input}
-            </pre>
+        <div className="px-5 pb-4">
+          <div className="text-[11px] text-[#aaa] mb-1.5">
+            AI-generated test case
           </div>
-          <div>
-            <div className="text-[11px] text-[#aaa] mb-1.5">Expected response</div>
-            <pre
-              className="rounded-[12px] p-3 text-[11px] overflow-x-auto leading-relaxed"
-              style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'pre-wrap' }}
-            >
-              {tc.expected}
-            </pre>
-          </div>
-          <div className="col-span-2 flex justify-end">
+
+          <pre
+            className="rounded-[12px] p-3 text-[12px] overflow-x-auto leading-relaxed"
+            style={{
+              background: '#f5f5f5',
+              border: '1px solid rgba(0,0,0,0.06)',
+              fontFamily: 'JetBrains Mono, monospace',
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {tc.description}
+          </pre>
+
+          <div className="mt-3 flex justify-end">
             <button
-              onClick={copy}
+              onClick={(event) => {
+                event.stopPropagation()
+                copy()
+              }}
               className="text-[12px] px-3 py-1.5 rounded-[10px] text-[#555] transition-colors"
-              style={{ background: copied ? '#dcfce7' : 'rgba(0,0,0,0.06)', color: copied ? '#15803d' : '#555', border: 'none', cursor: 'pointer', fontFamily: 'Questrial, sans-serif' }}
+              style={{
+                background: copied
+                  ? '#dcfce7'
+                  : 'rgba(0,0,0,0.06)',
+                color: copied
+                  ? '#15803d'
+                  : '#555',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'Questrial, sans-serif',
+              }}
             >
               {copied ? 'Copied!' : 'Copy test case'}
             </button>
@@ -187,95 +216,437 @@ function TestCaseRow({ tc }: { tc: TestCase }) {
 }
 
 export default function TestCases({ navigate }: Props) {
-  const [endpoint, setEndpoint] = useState(ENDPOINTS[1])
+  const [specifications, setSpecifications] = useState<
+    ApiSpecification[]
+  >([])
+
+  const [selectedSpecificationId, setSelectedSpecificationId] =
+    useState<number | null>(null)
+
+  const [endpoints, setEndpoints] = useState<ApiEndpoint[]>([])
+  const [selectedEndpointId, setSelectedEndpointId] =
+    useState<number | null>(null)
+
   const [style, setStyle] = useState<TestStyle>('jest')
-  const [categories, setCategories] = useState<TestCategory[]>(['happy', 'validation', 'edge', 'auth'])
+
+  const [categories, setCategories] = useState<TestCategory[]>([
+    'happy',
+    'validation',
+    'edge',
+    'auth',
+    'errors',
+  ])
+
+  const [testCases, setTestCases] = useState<TestCase[]>([])
   const [generated, setGenerated] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [loadingEndpoints, setLoadingEndpoints] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  function generate() {
+  /*
+   * Load API specifications.
+   */
+  useEffect(() => {
+    async function loadSpecifications() {
+      try {
+        setError(null)
+
+        const data = await getSpecifications()
+
+        setSpecifications(data)
+
+        if (data.length > 0) {
+          setSelectedSpecificationId(data[0].id)
+        }
+      } catch (error) {
+        console.error(
+          'Failed to load API specifications:',
+          error,
+        )
+
+        setError(
+          error instanceof Error
+            ? error.message
+            : 'Failed to load API specifications.',
+        )
+      }
+    }
+
+    loadSpecifications()
+  }, [])
+
+  /*
+   * Load endpoints whenever the selected API changes.
+   */
+  useEffect(() => {
+    if (selectedSpecificationId === null) {
+      setEndpoints([])
+      setSelectedEndpointId(null)
+      return
+    }
+
+    async function loadEndpoints() {
+      try {
+        setLoadingEndpoints(true)
+        setError(null)
+
+        const data = await getEndpoints(
+          selectedSpecificationId!,
+        )
+
+        setEndpoints(data)
+
+        if (data.length > 0) {
+          setSelectedEndpointId(data[0].id)
+        } else {
+          setSelectedEndpointId(null)
+        }
+
+        setGenerated(false)
+        setTestCases([])
+      } catch (error) {
+        console.error(
+          'Failed to load API endpoints:',
+          error,
+        )
+
+        setEndpoints([])
+        setSelectedEndpointId(null)
+
+        setError(
+          error instanceof Error
+            ? error.message
+            : 'Failed to load API endpoints.',
+        )
+      } finally {
+        setLoadingEndpoints(false)
+      }
+    }
+
+    loadEndpoints()
+  }, [selectedSpecificationId])
+
+  const selectedEndpoint =
+    endpoints.find(
+      (endpoint) =>
+        endpoint.id === selectedEndpointId,
+    ) ?? null
+
+  async function generate() {
+    if (
+      selectedSpecificationId === null ||
+      selectedEndpoint === null ||
+      generating
+    ) {
+      return
+    }
+
     setGenerating(true)
-    setTimeout(() => { setGenerating(false); setGenerated(true) }, 1200)
+    setGenerated(false)
+    setError(null)
+    setTestCases([])
+
+    const endpointLabel =
+      `${selectedEndpoint.method} ${selectedEndpoint.path}`
+
+    try {
+      const result = await generateTestCases(
+        `Generate test cases for ${endpointLabel}.`,
+        selectedSpecificationId,
+        style,
+        categories,
+      )
+
+      incrementAIQueryCount()
+
+      const mappedCases: TestCase[] =
+        result.test_cases.map(
+          (testCase, index) => ({
+            id: `generated-${index + 1}`,
+            title:
+              `${testCase.category} test case ${index + 1}`,
+            category:
+              normalizeCategory(
+                testCase.category,
+              ),
+            description:
+              testCase.description,
+          }),
+        )
+
+      setTestCases(mappedCases)
+      setGenerated(true)
+    } catch (error) {
+      console.error(
+        'Failed to generate test cases:',
+        error,
+      )
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to generate test cases.',
+      )
+    } finally {
+      setGenerating(false)
+    }
   }
 
   function toggleCat(cat: TestCategory) {
-    setCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])
+    setCategories((prev) =>
+      prev.includes(cat)
+        ? prev.filter(
+            (value) => value !== cat,
+          )
+        : [...prev, cat],
+    )
   }
 
-  const filtered = GENERATED.filter(tc => categories.includes(tc.category))
-
-  const [method, path] = endpoint.split(' ')
+  const filtered = testCases.filter(
+    (testCase) =>
+      categories.includes(testCase.category),
+  )
 
   return (
     <div>
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-[26px] font-semibold text-[#1a1a1a]">Test Case Generator</h1>
-        <p className="text-[14px] text-[#888] mt-0.5">Generate comprehensive test suites from your API schema</p>
+        <h1 className="text-[26px] font-semibold text-[#1a1a1a]">
+          Test Case Generator
+        </h1>
+
+        <p className="text-[14px] text-[#888] mt-0.5">
+          Generate comprehensive test suites from your API schema
+        </p>
       </div>
 
       <div className="grid grid-cols-5 gap-4">
+
         {/* Left: controls */}
         <div className="col-span-2">
           <div style={{ ...CARD, padding: '20px' }}>
             <div className="flex flex-col gap-4">
+
+              {/* API */}
               <div>
-                <label className="text-[12px] text-[#888] block mb-1.5">Endpoint</label>
+                <label className="text-[12px] text-[#888] block mb-1.5">
+                  API
+                </label>
+
                 <select
-                  value={endpoint}
-                  onChange={e => { setEndpoint(e.target.value); setGenerated(false) }}
+                  value={
+                    selectedSpecificationId ?? ''
+                  }
+                  onChange={(event) => {
+                    const value = Number(
+                      event.target.value,
+                    )
+
+                    setSelectedSpecificationId(
+                      value,
+                    )
+
+                    setGenerated(false)
+                    setTestCases([])
+                    setError(null)
+                  }}
                   className="w-full rounded-[12px] text-[13px] text-[#1a1a1a]"
-                  style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.1)', padding: '8px 12px', fontFamily: 'JetBrains Mono, monospace', outline: 'none' }}
+                  style={{
+                    background:
+                      'rgba(255,255,255,0.7)',
+                    border:
+                      '1px solid rgba(0,0,0,0.1)',
+                    padding: '8px 12px',
+                    fontFamily:
+                      'Questrial, sans-serif',
+                    outline: 'none',
+                  }}
                 >
-                  {ENDPOINTS.map(e => <option key={e}>{e}</option>)}
+                  {specifications.map(
+                    (specification) => (
+                      <option
+                        key={specification.id}
+                        value={specification.id}
+                      >
+                        {specification.title}
+                      </option>
+                    ),
+                  )}
                 </select>
               </div>
 
+              {/* Endpoint */}
               <div>
-                <label className="text-[12px] text-[#888] block mb-1.5">Test style</label>
+                <label className="text-[12px] text-[#888] block mb-1.5">
+                  Endpoint
+                </label>
+
+                <select
+                  value={
+                    selectedEndpointId ?? ''
+                  }
+                  onChange={(event) => {
+                    setSelectedEndpointId(
+                      Number(
+                        event.target.value,
+                      ),
+                    )
+
+                    setGenerated(false)
+                    setTestCases([])
+                    setError(null)
+                  }}
+                  disabled={
+                    loadingEndpoints ||
+                    endpoints.length === 0
+                  }
+                  className="w-full rounded-[12px] text-[13px] text-[#1a1a1a]"
+                  style={{
+                    background:
+                      'rgba(255,255,255,0.7)',
+                    border:
+                      '1px solid rgba(0,0,0,0.1)',
+                    padding: '8px 12px',
+                    fontFamily:
+                      'JetBrains Mono, monospace',
+                    outline: 'none',
+                  }}
+                >
+                  {loadingEndpoints && (
+                    <option>
+                      Loading endpoints...
+                    </option>
+                  )}
+
+                  {!loadingEndpoints &&
+                    endpoints.length === 0 && (
+                      <option>
+                        No endpoints available
+                      </option>
+                    )}
+
+                  {!loadingEndpoints &&
+                    endpoints.map(
+                      (endpoint) => (
+                        <option
+                          key={endpoint.id}
+                          value={endpoint.id}
+                        >
+                          {endpoint.method}{' '}
+                          {endpoint.path}
+                        </option>
+                      ),
+                    )}
+                </select>
+              </div>
+
+              {/* Test style */}
+              <div>
+                <label className="text-[12px] text-[#888] block mb-1.5">
+                  Test style
+                </label>
+
                 <div className="grid grid-cols-2 gap-1.5">
-                  {(['jest', 'pytest', 'postman', 'curl'] as TestStyle[]).map(s => (
+                  {(
+                    [
+                      'jest',
+                      'pytest',
+                      'postman',
+                      'curl',
+                    ] as TestStyle[]
+                  ).map((testStyle) => (
                     <button
-                      key={s}
-                      onClick={() => setStyle(s)}
+                      key={testStyle}
+                      onClick={() =>
+                        setStyle(testStyle)
+                      }
                       className="py-2 rounded-[10px] text-[13px] capitalize transition-all"
                       style={{
-                        background: style === s ? '#1a1a1a' : 'rgba(0,0,0,0.04)',
-                        color: style === s ? '#fff' : '#555',
+                        background:
+                          style === testStyle
+                            ? '#1a1a1a'
+                            : 'rgba(0,0,0,0.04)',
+                        color:
+                          style === testStyle
+                            ? '#fff'
+                            : '#555',
                         border: 'none',
                         cursor: 'pointer',
-                        fontFamily: 'Questrial, sans-serif',
+                        fontFamily:
+                          'Questrial, sans-serif',
                       }}
                     >
-                      {s}
+                      {testStyle}
                     </button>
                   ))}
                 </div>
               </div>
 
+              {/* Generation options */}
               <div>
-                <label className="text-[12px] text-[#888] block mb-2">Generation options</label>
+                <label className="text-[12px] text-[#888] block mb-2">
+                  Generation options
+                </label>
+
                 <div className="flex flex-col gap-2">
-                  {(Object.entries(CATEGORY_META) as [TestCategory, typeof CATEGORY_META[TestCategory]][]).map(([cat, meta]) => (
-                    <label key={cat} className="flex items-center gap-2.5 cursor-pointer">
+                  {(
+                    Object.entries(
+                      CATEGORY_META,
+                    ) as [
+                      TestCategory,
+                      typeof CATEGORY_META[TestCategory],
+                    ][]
+                  ).map(([cat, meta]) => (
+                    <label
+                      key={cat}
+                      className="flex items-center gap-2.5 cursor-pointer"
+                    >
                       <div
-                        onClick={() => toggleCat(cat)}
+                        onClick={() =>
+                          toggleCat(cat)
+                        }
                         className="w-4 h-4 rounded-[5px] flex items-center justify-center flex-shrink-0"
                         style={{
-                          background: categories.includes(cat) ? '#1a1a1a' : 'rgba(0,0,0,0.08)',
-                          border: categories.includes(cat) ? 'none' : '1px solid rgba(0,0,0,0.1)',
+                          background:
+                            categories.includes(
+                              cat,
+                            )
+                              ? '#1a1a1a'
+                              : 'rgba(0,0,0,0.08)',
+                          border:
+                            categories.includes(
+                              cat,
+                            )
+                              ? 'none'
+                              : '1px solid rgba(0,0,0,0.1)',
                           cursor: 'pointer',
                         }}
                       >
-                        {categories.includes(cat) && (
-                          <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3} strokeLinecap="round">
+                        {categories.includes(
+                          cat,
+                        ) && (
+                          <svg
+                            width={10}
+                            height={10}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="white"
+                            strokeWidth={3}
+                            strokeLinecap="round"
+                          >
                             <path d="M20 6L9 17l-5-5" />
                           </svg>
                         )}
                       </div>
+
                       <span
                         className="text-[11px] px-2 py-0.5 rounded-full font-medium"
-                        style={{ background: meta.color, color: meta.textColor }}
+                        style={{
+                          background:
+                            meta.color,
+                          color:
+                            meta.textColor,
+                        }}
                       >
                         {meta.label}
                       </span>
@@ -284,14 +655,45 @@ export default function TestCases({ navigate }: Props) {
                 </div>
               </div>
 
+              {/* Error */}
+              {error && (
+                <div
+                  className="rounded-[12px] px-3 py-2 text-[12px]"
+                  style={{
+                    background: '#fee2e2',
+                    color: '#b91c1c',
+                    border:
+                      '1px solid rgba(185,28,28,0.12)',
+                  }}
+                >
+                  {error}
+                </div>
+              )}
+
+              {/* Generate */}
               <button
-                style={{ ...BTN_PRIMARY, width: '100%', justifyContent: 'center', opacity: generating ? 0.7 : 1 }}
+                style={{
+                  ...BTN_PRIMARY,
+                  width: '100%',
+                  justifyContent: 'center',
+                  opacity: generating
+                    ? 0.7
+                    : 1,
+                }}
                 onClick={generate}
-                disabled={generating}
+                disabled={
+                  generating ||
+                  selectedEndpoint === null
+                }
               >
                 {generating ? (
-                  <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Generating...</>
-                ) : 'Generate test cases'}
+                  <>
+                    <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  'Generate test cases'
+                )}
               </button>
             </div>
           </div>
@@ -299,33 +701,89 @@ export default function TestCases({ navigate }: Props) {
 
         {/* Right: results */}
         <div className="col-span-3">
+
           {!generated && !generating && (
-            <div className="flex flex-col items-center justify-center rounded-[20px] text-center" style={{ ...CARD, minHeight: 300 }}>
-              <svg width={40} height={40} viewBox="0 0 24 24" fill="none" stroke="#ddd" strokeWidth={1.5} strokeLinecap="round" className="mb-3">
+            <div
+              className="flex flex-col items-center justify-center rounded-[20px] text-center"
+              style={{
+                ...CARD,
+                minHeight: 300,
+              }}
+            >
+              <svg
+                width={40}
+                height={40}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#ddd"
+                strokeWidth={1.5}
+                strokeLinecap="round"
+                className="mb-3"
+              >
                 <path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
               </svg>
-              <div className="text-[14px] text-[#ccc]">Configure and generate<br />to see test cases here</div>
+
+              <div className="text-[14px] text-[#ccc]">
+                Configure and generate
+                <br />
+                to see test cases here
+              </div>
             </div>
           )}
 
           {generating && (
-            <div className="flex flex-col items-center justify-center rounded-[20px]" style={{ ...CARD, minHeight: 300 }}>
+            <div
+              className="flex flex-col items-center justify-center rounded-[20px]"
+              style={{
+                ...CARD,
+                minHeight: 300,
+              }}
+            >
               <div className="w-8 h-8 rounded-full border-2 border-black/10 border-t-black/70 animate-spin mb-3" />
-              <div className="text-[14px] text-[#888]">Generating test cases...</div>
+
+              <div className="text-[14px] text-[#888]">
+                Generating test cases...
+              </div>
             </div>
           )}
 
-          {generated && (
-            <div style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
-              <div className="px-5 py-3.5 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+          {generated && selectedEndpoint && (
+            <div
+              style={{
+                ...CARD,
+                padding: 0,
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                className="px-5 py-3.5 flex items-center justify-between"
+                style={{
+                  borderBottom:
+                    '1px solid rgba(0,0,0,0.06)',
+                }}
+              >
                 <div className="flex items-center gap-3">
-                  <MethodBadge method={method} />
-                  <span className="font-mono text-[13px] text-[#1a1a1a]">{path}</span>
+                  <MethodBadge
+                    method={selectedEndpoint.method}
+                  />
+
+                  <span className="font-mono text-[13px] text-[#1a1a1a]">
+                    {selectedEndpoint.path}
+                  </span>
                 </div>
-                <span className="text-[12px] text-[#aaa]">{filtered.length} test cases · {style}</span>
+
+                <span className="text-[12px] text-[#aaa]">
+                  {filtered.length} test cases ·{' '}
+                  {style}
+                </span>
               </div>
 
-              {filtered.map(tc => <TestCaseRow key={tc.id} tc={tc} />)}
+              {filtered.map((testCase) => (
+                <TestCaseRow
+                  key={testCase.id}
+                  tc={testCase}
+                />
+              ))}
 
               {filtered.length === 0 && (
                 <div className="py-10 text-center text-[13px] text-[#ccc]">

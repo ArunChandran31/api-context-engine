@@ -8,6 +8,11 @@ from app.schemas.common import BaseSchema
 class RAGQueryRequest(BaseSchema):
     query: str = Field(..., min_length=1)
 
+    specification_id: int | None = Field(
+        default=None,
+        gt=0,
+    )
+
     limit: int | None = Field(
         default=None,
         gt=0,

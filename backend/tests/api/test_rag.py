@@ -4,17 +4,25 @@ from fastapi.testclient import TestClient
 
 from app.api.rag import get_rag_dependencies
 from app.cache.dependencies import get_cache_service
+from app.core.auth import AuthenticatedUser, get_current_user
 from app.database.models.api_specification import ApiSpecification
 from app.database.models.endpoint import Endpoint
 from app.main import app
 from app.rag.chunker import DocumentChunker
+from app.rag.context_generator import ContextGenerator
 from app.rag.dependencies import RAGDependencies
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.in_memory_vector_store import InMemoryVectorStore
+from app.rag.indexing_orchestrator import RAGIndexingOrchestrator
 from app.rag.indexing_service import RAGIndexingService
 from app.rag.persistence import VectorStorePersistence
 from app.rag.pipeline import RAGPipeline
 from app.rag.retrieval_service import RAGRetrievalService, RetrievalResult
+
+TEST_USER = AuthenticatedUser(
+    id="test-user-id",
+    email="test@example.com",
+)
 
 
 class KeywordEmbeddingProvider(EmbeddingProvider):
@@ -65,8 +73,20 @@ class FakeCacheService:
     def delete(self, key: str) -> bool:
         return self._values.pop(key, None) is not None
 
+    def delete_pattern(self, pattern: str) -> int:
+        import fnmatch
 
-def test_query_rag_returns_retrieved_results() -> None:
+        matching_keys = [key for key in self._values if fnmatch.fnmatch(key, pattern)]
+
+        for key in matching_keys:
+            del self._values[key]
+
+        return len(matching_keys)
+
+
+def test_query_rag_returns_retrieved_results(
+    monkeypatch,
+) -> None:
     retrieval_service = MagicMock()
 
     retrieval_service.retrieve.return_value = [
@@ -86,8 +106,22 @@ def test_query_rag_returns_retrieved_results() -> None:
 
     cache = FakeCacheService()
 
+    specification = ApiSpecification(
+        id=1,
+        title="Users API",
+        version="1.0.0",
+        description="User management API",
+        source_file="users.yaml",
+    )
+
+    monkeypatch.setattr(
+        "app.api.rag.specification_service.get",
+        lambda db, specification_id, user: specification,
+    )
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
+    app.dependency_overrides[get_current_user] = lambda: TEST_USER
 
     try:
         client = TestClient(app)
@@ -96,6 +130,7 @@ def test_query_rag_returns_retrieved_results() -> None:
             "/api/rag/query",
             json={
                 "query": "How do I create a user?",
+                "specification_id": 1,
                 "limit": 3,
             },
         )
@@ -121,10 +156,13 @@ def test_query_rag_returns_retrieved_results() -> None:
     retrieval_service.retrieve.assert_called_once_with(
         query="How do I create a user?",
         limit=3,
+        specification_id=1,
     )
 
 
-def test_query_rag_returns_cached_results_without_retrieval() -> None:
+def test_query_rag_returns_cached_results_without_retrieval(
+    monkeypatch,
+) -> None:
     retrieval_service = MagicMock()
 
     cached_results = [
@@ -145,8 +183,22 @@ def test_query_rag_returns_cached_results_without_retrieval() -> None:
     dependencies.retrieval_service = retrieval_service
     dependencies.retrieval_limit = 5
 
+    specification = ApiSpecification(
+        id=1,
+        title="Users API",
+        version="1.0.0",
+        description="User management API",
+        source_file="users.yaml",
+    )
+
+    monkeypatch.setattr(
+        "app.api.rag.specification_service.get",
+        lambda db, specification_id, user: specification,
+    )
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
+    app.dependency_overrides[get_current_user] = lambda: TEST_USER
 
     try:
         client = TestClient(app)
@@ -155,6 +207,7 @@ def test_query_rag_returns_cached_results_without_retrieval() -> None:
             "/api/rag/query",
             json={
                 "query": "How do I create a user?",
+                "specification_id": 1,
             },
         )
     finally:
@@ -171,7 +224,9 @@ def test_query_rag_returns_cached_results_without_retrieval() -> None:
     cache.get.assert_called_once()
 
 
-def test_query_rag_uses_configured_default_limit() -> None:
+def test_query_rag_uses_configured_default_limit(
+    monkeypatch,
+) -> None:
     retrieval_service = MagicMock()
     retrieval_service.retrieve.return_value = []
 
@@ -181,8 +236,22 @@ def test_query_rag_uses_configured_default_limit() -> None:
 
     cache = FakeCacheService()
 
+    specification = ApiSpecification(
+        id=1,
+        title="Users API",
+        version="1.0.0",
+        description="User management API",
+        source_file="users.yaml",
+    )
+
+    monkeypatch.setattr(
+        "app.api.rag.specification_service.get",
+        lambda db, specification_id, user: specification,
+    )
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
+    app.dependency_overrides[get_current_user] = lambda: TEST_USER
 
     try:
         client = TestClient(app)
@@ -191,6 +260,7 @@ def test_query_rag_uses_configured_default_limit() -> None:
             "/api/rag/query",
             json={
                 "query": "How do I list users?",
+                "specification_id": 1,
             },
         )
     finally:
@@ -201,6 +271,7 @@ def test_query_rag_uses_configured_default_limit() -> None:
     retrieval_service.retrieve.assert_called_once_with(
         query="How do I list users?",
         limit=7,
+        specification_id=1,
     )
 
 
@@ -211,6 +282,7 @@ def test_query_rag_rejects_empty_query() -> None:
 
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
+    app.dependency_overrides[get_current_user] = lambda: TEST_USER
 
     try:
         client = TestClient(app)
@@ -234,6 +306,7 @@ def test_query_rag_rejects_invalid_limit() -> None:
 
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
+    app.dependency_overrides[get_current_user] = lambda: TEST_USER
 
     try:
         client = TestClient(app)
@@ -251,7 +324,9 @@ def test_query_rag_rejects_invalid_limit() -> None:
     assert response.status_code == 422
 
 
-def test_query_rag_returns_empty_results_when_no_context_matches() -> None:
+def test_query_rag_returns_empty_results_when_no_context_matches(
+    monkeypatch,
+) -> None:
     retrieval_service = MagicMock()
     retrieval_service.retrieve.return_value = []
 
@@ -261,8 +336,22 @@ def test_query_rag_returns_empty_results_when_no_context_matches() -> None:
 
     cache = FakeCacheService()
 
+    specification = ApiSpecification(
+        id=1,
+        title="Users API",
+        version="1.0.0",
+        description="User management API",
+        source_file="users.yaml",
+    )
+
+    monkeypatch.setattr(
+        "app.api.rag.specification_service.get",
+        lambda db, specification_id, user: specification,
+    )
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
+    app.dependency_overrides[get_current_user] = lambda: TEST_USER
 
     try:
         client = TestClient(app)
@@ -271,6 +360,7 @@ def test_query_rag_returns_empty_results_when_no_context_matches() -> None:
             "/api/rag/query",
             json={
                 "query": "Unknown API operation",
+                "specification_id": 1,
             },
         )
     finally:
@@ -320,20 +410,26 @@ def test_index_specification_indexes_generated_documents(
     indexing_service.index_document.side_effect = [2, 1]
 
     persistence = MagicMock()
+    cache = FakeCacheService()
+
+    orchestrator = RAGIndexingOrchestrator(
+        context_generator=ContextGenerator(),
+        indexing_service=indexing_service,
+        persistence=persistence,
+        cache_service=cache,
+    )
 
     dependencies = MagicMock(spec=RAGDependencies)
-    dependencies.indexing_service = indexing_service
-    dependencies.persistence = persistence
+    dependencies.indexing_orchestrator = orchestrator
 
     monkeypatch.setattr(
         "app.api.rag.specification_service.get",
-        lambda db, specification_id: specification,
+        lambda db, specification_id, user: specification,
     )
-
-    cache = FakeCacheService()
 
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
+    app.dependency_overrides[get_current_user] = lambda: TEST_USER
 
     try:
         client = TestClient(app)
@@ -363,13 +459,14 @@ def test_index_specification_returns_404_when_specification_missing(
 
     monkeypatch.setattr(
         "app.api.rag.specification_service.get",
-        lambda db, specification_id: None,
+        lambda db, specification_id, user: None,
     )
 
     cache = FakeCacheService()
 
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
+    app.dependency_overrides[get_current_user] = lambda: TEST_USER
 
     try:
         client = TestClient(app)
@@ -402,20 +499,26 @@ def test_index_specification_handles_specification_without_endpoints(
 
     indexing_service = MagicMock()
     persistence = MagicMock()
+    cache = FakeCacheService()
+
+    orchestrator = RAGIndexingOrchestrator(
+        context_generator=ContextGenerator(),
+        indexing_service=indexing_service,
+        persistence=persistence,
+        cache_service=cache,
+    )
 
     dependencies = MagicMock(spec=RAGDependencies)
-    dependencies.indexing_service = indexing_service
-    dependencies.persistence = persistence
+    dependencies.indexing_orchestrator = orchestrator
 
     monkeypatch.setattr(
         "app.api.rag.specification_service.get",
-        lambda db, specification_id: specification,
+        lambda db, specification_id, user: specification,
     )
-
-    cache = FakeCacheService()
 
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
+    app.dependency_overrides[get_current_user] = lambda: TEST_USER
 
     try:
         client = TestClient(app)
@@ -496,6 +599,17 @@ def test_indexed_specification_can_be_queried_through_shared_vector_store(
         retrieval_service=retrieval_service,
     )
 
+    cache = FakeCacheService()
+
+    context_generator = ContextGenerator()
+
+    indexing_orchestrator = RAGIndexingOrchestrator(
+        context_generator=context_generator,
+        indexing_service=indexing_service,
+        persistence=persistence,
+        cache_service=cache,
+    )
+
     dependencies = RAGDependencies(
         embedding_provider=embedding_provider,
         vector_store=vector_store,
@@ -504,18 +618,19 @@ def test_indexed_specification_can_be_queried_through_shared_vector_store(
         indexing_service=indexing_service,
         retrieval_service=retrieval_service,
         pipeline=pipeline,
+        context_generator=context_generator,
+        indexing_orchestrator=indexing_orchestrator,
         retrieval_limit=5,
     )
 
     monkeypatch.setattr(
         "app.api.rag.specification_service.get",
-        lambda db, specification_id: specification,
+        lambda db, specification_id, user: specification,
     )
-
-    cache = FakeCacheService()
 
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
+    app.dependency_overrides[get_current_user] = lambda: TEST_USER
 
     try:
         client = TestClient(app)
@@ -528,6 +643,7 @@ def test_indexed_specification_can_be_queried_through_shared_vector_store(
             "/api/rag/query",
             json={
                 "query": "How do I create a user?",
+                "specification_id": 1,
                 "limit": 1,
             },
         )
@@ -566,21 +682,29 @@ def test_index_specification_persists_after_success(
     specification.endpoints = []
 
     indexing_service = MagicMock()
+
     persistence = MagicMock(spec=VectorStorePersistence)
-
-    dependencies = MagicMock(spec=RAGDependencies)
-    dependencies.indexing_service = indexing_service
-    dependencies.persistence = persistence
-
-    monkeypatch.setattr(
-        "app.api.rag.specification_service.get",
-        lambda db, specification_id: specification,
-    )
 
     cache = FakeCacheService()
 
+    orchestrator = RAGIndexingOrchestrator(
+        context_generator=ContextGenerator(),
+        indexing_service=indexing_service,
+        persistence=persistence,
+        cache_service=cache,
+    )
+
+    dependencies = MagicMock(spec=RAGDependencies)
+    dependencies.indexing_orchestrator = orchestrator
+
+    monkeypatch.setattr(
+        "app.api.rag.specification_service.get",
+        lambda db, specification_id, user: specification,
+    )
+
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
+    app.dependency_overrides[get_current_user] = lambda: TEST_USER
 
     try:
         client = TestClient(app)
@@ -610,19 +734,26 @@ def test_index_specification_propagates_persistence_failure(
     persistence = MagicMock(spec=VectorStorePersistence)
     persistence.save.side_effect = OSError("Unable to persist vector store.")
 
+    cache = FakeCacheService()
+
+    orchestrator = RAGIndexingOrchestrator(
+        context_generator=ContextGenerator(),
+        indexing_service=indexing_service,
+        persistence=persistence,
+        cache_service=cache,
+    )
+
     dependencies = MagicMock(spec=RAGDependencies)
-    dependencies.indexing_service = indexing_service
-    dependencies.persistence = persistence
+    dependencies.indexing_orchestrator = orchestrator
 
     monkeypatch.setattr(
         "app.api.rag.specification_service.get",
-        lambda db, specification_id: specification,
+        lambda db, specification_id, user: specification,
     )
-
-    cache = FakeCacheService()
 
     app.dependency_overrides[get_rag_dependencies] = lambda: dependencies
     app.dependency_overrides[get_cache_service] = lambda: cache
+    app.dependency_overrides[get_current_user] = lambda: TEST_USER
 
     try:
         client = TestClient(

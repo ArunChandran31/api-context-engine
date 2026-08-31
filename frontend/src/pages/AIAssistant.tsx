@@ -1,6 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { askQuestion } from '../api/ai'
+import {
+  getSpecifications,
+  type ApiSpecification,
+} from '../api/specifications'
 import type { Page } from '../utils'
 import { CARD, INPUT_STYLE } from '../utils'
+import { incrementAIQueryCount } from '../utils/sessionMetrics'
 
 interface Props { navigate: (p: Page) => void }
 
@@ -16,23 +24,6 @@ const INITIAL: Message[] = [
     content: "Hello! I'm your API context assistant. I've indexed your Petstore API, Payment API, and External Users API. Ask me anything about endpoints, schemas, request formats, or authentication.",
   },
 ]
-
-const DEMO_RESPONSES: Record<string, { content: string; sources?: { method: string; path: string; spec: string }[] }> = {
-  default: {
-    content: "Based on the indexed API context, here's what I found:\n\nThe endpoint you're asking about supports standard REST operations. The request body should be JSON-encoded with the Content-Type header set to `application/json`. Authentication is required via Bearer token in the Authorization header.\n\nYou can also explore the full schema in the API Explorer for more details.",
-    sources: [
-      { method: 'POST', path: '/pets', spec: 'Petstore API' },
-      { method: 'GET', path: '/pets/{petId}', spec: 'Petstore API' },
-    ],
-  },
-  auth: {
-    content: "Authentication uses OAuth 2.0 with the following scopes:\n\n• `read:pets` — Read-only access to pet data\n• `write:pets` — Create, update, and delete pets\n• `admin` — Full administrative access\n\nInclude the token in your Authorization header:\n```\nAuthorization: Bearer <your_token>\n```\n\nTokens expire after 3600 seconds. Use the `/user/login` endpoint to obtain a new token.",
-    sources: [
-      { method: 'GET', path: '/user/login', spec: 'Petstore API' },
-      { method: 'GET', path: '/user/logout', spec: 'Petstore API' },
-    ],
-  },
-}
 
 function SourceTag({ method, path, spec }: { method: string; path: string; spec: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
@@ -55,7 +46,6 @@ function SourceTag({ method, path, spec }: { method: string; path: string; spec:
 
 function MessageBubble({ msg }: { msg: Message }) {
   const isUser = msg.role === 'user'
-  const lines = msg.content.split('\n')
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
@@ -71,9 +61,9 @@ function MessageBubble({ msg }: { msg: Message }) {
           </svg>
         </div>
       )}
-      <div className="max-w-[80%]">
+      <div className="max-w-[80%] min-w-0">
         <div
-          className="px-4 py-3 rounded-[16px] text-[14px] leading-relaxed"
+          className="px-4 py-3 rounded-[16px] text-[14px] leading-relaxed min-w-0 max-w-full"
           style={{
             background: isUser ? '#1a1a1a' : 'rgba(255,255,255,0.8)',
             color: isUser ? '#fff' : '#1a1a1a',
@@ -83,24 +73,114 @@ function MessageBubble({ msg }: { msg: Message }) {
             borderTopLeftRadius: isUser ? 16 : 4,
           }}
         >
-          {lines.map((line, i) => {
-            if (line.startsWith('```')) return null
-            if (line.match(/^[•\-] /)) {
-              return <div key={i} className="flex gap-2 my-0.5"><span style={{ opacity: 0.5 }}>•</span><span>{line.slice(2)}</span></div>
-            }
-            if (line.includes('`') && !line.startsWith('```')) {
-              const parts = line.split(/(`[^`]+`)/)
-              return (
-                <p key={i} className="mb-1">
-                  {parts.map((p, j) => p.startsWith('`') && p.endsWith('`')
-                    ? <code key={j} className="font-mono text-[12px] px-1 rounded" style={{ background: isUser ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.06)' }}>{p.slice(1,-1)}</code>
-                    : <span key={j}>{p}</span>
-                  )}
-                </p>
-              )
-            }
-            return line ? <p key={i} className="mb-1">{line}</p> : <div key={i} className="h-1" />
-          })}
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              p: ({ children }) => (
+                <p className="mb-2 last:mb-0">{children}</p>
+              ),
+
+              strong: ({ children }) => (
+                <strong className="font-semibold">{children}</strong>
+              ),
+              pre: ({ children }) => (
+                <pre
+                  className="my-3 max-w-full overflow-x-auto rounded-[10px] p-3"
+                  style={{
+                    background: isUser
+                      ? 'rgba(255,255,255,0.08)'
+                      : 'rgba(0,0,0,0.04)',
+                    border: isUser
+                      ? '1px solid rgba(255,255,255,0.12)'
+                      : '1px solid rgba(0,0,0,0.06)',
+                    whiteSpace: 'pre-wrap',
+                    overflowWrap: 'anywhere',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {children}
+                </pre>
+              ),
+              code: ({ children }) => (
+                <code
+                  className="font-mono text-[12px]"
+                  style={{
+                    overflowWrap: 'anywhere',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {children}
+                </code>
+              ),
+
+              ul: ({ children }) => (
+                <ul className="list-disc pl-5 mb-2 space-y-1">
+                  {children}
+                </ul>
+              ),
+
+              ol: ({ children }) => (
+                <ol className="list-decimal pl-5 mb-2 space-y-1">
+                  {children}
+                </ol>
+              ),
+
+              table: ({ children }) => (
+                <div className="my-3 overflow-x-auto">
+                  <table
+                    className="w-full text-left text-[13px]"
+                    style={{
+                      borderCollapse: 'separate',
+                      borderSpacing: 0,
+                      border: '1px solid rgba(0,0,0,0.08)',
+                      borderRadius: 10,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {children}
+                  </table>
+                </div>
+              ),
+
+              thead: ({ children }) => (
+                <thead
+                  style={{
+                    background: 'rgba(0,0,0,0.04)',
+                  }}
+                >
+                  {children}
+                </thead>
+              ),
+
+              th: ({ children }) => (
+                <th
+                  className="px-3 py-2 font-semibold whitespace-nowrap"
+                  style={{
+                    borderBottom: '1px solid rgba(0,0,0,0.08)',
+                  }}
+                >
+                  {children}
+                </th>
+              ),
+
+              td: ({ children }) => (
+                <td
+                  className="px-3 py-2 align-top"
+                  style={{
+                    borderBottom: '1px solid rgba(0,0,0,0.06)',
+                  }}
+                >
+                  {children}
+                </td>
+              ),
+
+              tr: ({ children }) => (
+                <tr>{children}</tr>
+              ),
+            }}
+          >
+            {msg.content}
+          </ReactMarkdown>
         </div>
 
         {msg.sources && msg.sources.length > 0 && (
@@ -120,26 +200,94 @@ export default function AIAssistant({ navigate }: Props) {
   const [messages, setMessages] = useState<Message[]>(INITIAL)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [context, setContext] = useState('Petstore API')
+  const [specifications, setSpecifications] = useState<ApiSpecification[]>([])
+  const [selectedSpecificationId, setSelectedSpecificationId] = useState<number | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
+  const selectedSpecification = specifications.find(
+    spec => spec.id === selectedSpecificationId,
+  )
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  function send() {
+  useEffect(() => {
+    async function loadSpecifications() {
+      try {
+        const data = await getSpecifications()
+
+        setSpecifications(data)
+
+        if (data.length > 0) {
+          setSelectedSpecificationId(data[0].id)
+        }
+      } catch (error) {
+        console.error('Failed to load API specifications:', error)
+      }
+    }
+
+    loadSpecifications()
+  }, [])
+
+  async function send() {
     const q = input.trim()
+
     if (!q || loading) return
+
+    if (selectedSpecificationId === null) {
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: 'Please select an API before asking a question.',
+        },
+      ])
+      return
+    }
+
     setInput('')
-    setMessages(prev => [...prev, { role: 'user', content: q }])
+
+    setMessages(prev => [
+      ...prev,
+      { role: 'user', content: q },
+    ])
+
     setLoading(true)
 
-    setTimeout(() => {
-      const key = q.toLowerCase().includes('auth') ? 'auth' : 'default'
-      const res = DEMO_RESPONSES[key]
-      setMessages(prev => [...prev, { role: 'assistant', ...res }])
+    try {
+      const result = await askQuestion(
+        q,
+        selectedSpecificationId,
+      )
+
+      incrementAIQueryCount()
+
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: result.answer,
+          sources: result.sources.map(source => ({
+            method: source.method,
+            path: source.path,
+            spec: selectedSpecification?.title ?? 'Unknown API',
+          })),
+        },
+      ])
+    } catch (error) {
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content:
+            error instanceof Error
+              ? `Sorry, I couldn't answer that.\n\n${error.message}`
+              : 'Sorry, I could not reach the AI service.',
+        },
+      ])
+    } finally {
       setLoading(false)
-    }, 1200)
+    }
   }
 
   function clear() {
@@ -157,14 +305,26 @@ export default function AIAssistant({ navigate }: Props) {
         <div className="flex items-center gap-2">
           {/* Context selector */}
           <select
-            value={context}
-            onChange={e => setContext(e.target.value)}
-            style={{ ...INPUT_STYLE, width: 'auto', borderRadius: '20px', fontSize: 13, padding: '6px 14px' }}
+            value={selectedSpecificationId ?? ''}
+            onChange={e => setSelectedSpecificationId(Number(e.target.value))}
+            disabled={specifications.length === 0}
+            style={{
+              ...INPUT_STYLE,
+              width: 'auto',
+              minWidth: '160px',
+              borderRadius: '20px',
+              fontSize: 13,
+              padding: '6px 14px',
+            }}
           >
-            <option>Petstore API</option>
-            <option>Payment API</option>
-            <option>External Users API</option>
-            <option>All APIs</option>
+            {specifications.map(specification => (
+              <option
+                key={specification.id}
+                value={specification.id}
+              >
+                {specification.title}
+              </option>
+            ))}
           </select>
           <button
             onClick={clear}
@@ -178,8 +338,18 @@ export default function AIAssistant({ navigate }: Props) {
 
       {/* Context badge */}
       <div className="mb-3 flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full" style={{ background: '#22c55e' }} />
-        <span className="text-[12px] text-[#888]">Context: <span className="text-[#555] font-medium">{context}</span></span>
+        <div
+          className="w-2 h-2 rounded-full"
+          style={{ background: '#22c55e' }}
+        />
+        <span className="text-[12px] text-[#888]">
+          Context:{' '}
+          <span className="text-[#555] font-medium">
+            {specifications.find(
+              specification => specification.id === selectedSpecificationId
+            )?.title ?? 'No API selected'}
+          </span>
+        </span>
       </div>
 
       {/* Messages */}

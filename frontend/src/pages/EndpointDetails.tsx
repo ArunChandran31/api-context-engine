@@ -111,6 +111,44 @@ function getSchemaType(
   return 'object'
 }
 
+function getSchemaDetails(
+  schema: Record<string, unknown> | undefined,
+): {
+  format?: string
+  enumValues?: string[]
+  defaultValue?: unknown
+  nullable?: boolean
+} {
+  if (!schema) {
+    return {}
+  }
+
+  const details: {
+    format?: string
+    enumValues?: string[]
+    defaultValue?: unknown
+    nullable?: boolean
+  } = {}
+
+  if (typeof schema.format === 'string') {
+    details.format = schema.format
+  }
+
+  if (Array.isArray(schema.enum)) {
+    details.enumValues = schema.enum.map(String)
+  }
+
+  if ('default' in schema) {
+    details.defaultValue = schema.default
+  }
+
+  if (typeof schema.nullable === 'boolean') {
+    details.nullable = schema.nullable
+  }
+
+  return details
+}
+
 function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
@@ -186,6 +224,7 @@ function renderParameters(ep: ApiEndpoint) {
               : undefined
 
           const required = parameter.required === true
+          const schemaDetails = getSchemaDetails(schema)
 
           return (
             <tr
@@ -224,7 +263,70 @@ function renderParameters(ep: ApiEndpoint) {
               </td>
 
               <td className="py-2 text-[#666]">
-                {parameter.description ?? 'No description'}
+                <div>
+                  {parameter.description ?? 'No description'}
+                </div>
+
+                {(schemaDetails.format ||
+                  schemaDetails.enumValues ||
+                  'defaultValue' in schemaDetails ||
+                  schemaDetails.nullable !== undefined) && (
+                  <div className="flex flex-wrap gap-2 mt-1.5">
+                    {schemaDetails.format && (
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[11px] font-mono"
+                        style={{
+                          background: 'rgba(0,0,0,0.05)',
+                          color: '#666',
+                        }}
+                      >
+                        format: {schemaDetails.format}
+                      </span>
+                    )}
+
+                    {schemaDetails.enumValues && (
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[11px] font-mono"
+                        style={{
+                          background: '#f3f4f6',
+                          color: '#666',
+                        }}
+                      >
+                        enum: {schemaDetails.enumValues.join(' | ')}
+                      </span>
+                    )}
+
+                    {'defaultValue' in schemaDetails && (
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[11px] font-mono"
+                        style={{
+                          background: '#f3f4f6',
+                          color: '#666',
+                        }}
+                      >
+                        default: {String(schemaDetails.defaultValue)}
+                      </span>
+                    )}
+
+                    {schemaDetails.nullable !== undefined && (
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[11px]"
+                        style={{
+                          background: schemaDetails.nullable
+                            ? '#dbeafe'
+                            : 'rgba(0,0,0,0.05)',
+                          color: schemaDetails.nullable
+                            ? '#1d4ed8'
+                            : '#888',
+                        }}
+                      >
+                        {schemaDetails.nullable
+                          ? 'nullable'
+                          : 'non-nullable'}
+                      </span>
+                    )}
+                  </div>
+                )}
               </td>
             </tr>
           )
@@ -243,7 +345,61 @@ function renderRequestBody(ep: ApiEndpoint) {
     )
   }
 
-  return <Code>{formatJson(ep.request_body)}</Code>
+  const requestBody = ep.request_body
+  const required = requestBody.required === true
+
+  const content =
+    requestBody.content &&
+    typeof requestBody.content === 'object' &&
+    !Array.isArray(requestBody.content)
+      ? requestBody.content as Record<string, unknown>
+      : {}
+
+  const contentEntries = Object.entries(content)
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <span className="text-[13px] text-[#555]">
+          Required
+        </span>
+
+        <span
+          className="px-2 py-0.5 rounded-full text-[11px]"
+          style={{
+            background: required
+              ? '#dcfce7'
+              : 'rgba(0,0,0,0.05)',
+            color: required ? '#15803d' : '#888',
+          }}
+        >
+          {required ? 'Yes' : 'No'}
+        </span>
+      </div>
+
+      {contentEntries.length === 0 ? (
+        <div className="text-[13px] text-[#888]">
+          No content schema defined.
+        </div>
+      ) : (
+        contentEntries.map(([contentType, mediaType]) => (
+          <div key={contentType} className="flex flex-col gap-2">
+            <div className="text-[12px] text-[#aaa] font-medium">
+              Content type
+            </div>
+
+            <div className="font-mono text-[13px] text-[#1a1a1a]">
+              {contentType}
+            </div>
+
+            <Code>
+              {formatJson(mediaType)}
+            </Code>
+          </div>
+        ))
+      )}
+    </div>
+  )
 }
 
 function renderResponses(ep: ApiEndpoint) {
@@ -259,7 +415,7 @@ function renderResponses(ep: ApiEndpoint) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {entries.map(([code, response]) => {
         const style = getResponseStyle(code)
 
@@ -269,21 +425,115 @@ function renderResponses(ep: ApiEndpoint) {
             ? response.description
             : 'No description'
 
+        const content =
+          response &&
+          typeof response.content === 'object' &&
+          !Array.isArray(response.content)
+            ? response.content as Record<string, unknown>
+            : {}
+
+        const contentEntries = Object.entries(content)
+
         return (
           <div
             key={code}
-            className="flex items-start gap-3"
+            className="flex flex-col gap-3"
           >
-            <span
-              className="font-mono text-[13px] px-2 py-0.5 rounded-full font-semibold"
-              style={style}
-            >
-              {code}
-            </span>
+            <div className="flex items-start gap-3">
+              <span
+                className="font-mono text-[13px] px-2 py-0.5 rounded-full font-semibold"
+                style={style}
+              >
+                {code}
+              </span>
 
-            <span className="text-[13px] text-[#555]">
-              {description}
-            </span>
+              <span className="text-[13px] text-[#555]">
+                {description}
+              </span>
+            </div>
+
+            {contentEntries.length > 0 && (
+              <div className="ml-0 flex flex-col gap-3">
+                {contentEntries.map(
+                  ([contentType, mediaType]) => {
+                    const mediaTypeObject =
+                      mediaType &&
+                      typeof mediaType === 'object' &&
+                      !Array.isArray(mediaType)
+                        ? mediaType as Record<string, unknown>
+                        : {}
+
+                    const schema =
+                      mediaTypeObject.schema &&
+                      typeof mediaTypeObject.schema === 'object' &&
+                      !Array.isArray(mediaTypeObject.schema)
+                        ? mediaTypeObject.schema as Record<
+                            string,
+                            unknown
+                          >
+                        : undefined
+
+                    return (
+                      <div
+                        key={contentType}
+                        className="rounded-[12px] p-3"
+                        style={{
+                          background:
+                            'rgba(0,0,0,0.025)',
+                          border:
+                            '1px solid rgba(0,0,0,0.05)',
+                        }}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-[12px] text-[#aaa]">
+                            Content type
+                          </span>
+
+                          <span className="font-mono text-[12px] text-[#1a1a1a]">
+                            {contentType}
+                          </span>
+                        </div>
+
+                        {schema ? (
+                          <div className="flex flex-col gap-2">
+                            <div className="text-[12px] text-[#aaa]">
+                              Schema
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-[13px] text-[#1a1a1a]">
+                                {getSchemaType(schema)}
+                              </span>
+
+                              {typeof schema.format === 'string' && (
+                                <span
+                                  className="px-2 py-0.5 rounded-full text-[11px] font-mono"
+                                  style={{
+                                    background:
+                                      'rgba(0,0,0,0.05)',
+                                    color: '#666',
+                                  }}
+                                >
+                                  {schema.format}
+                                </span>
+                              )}
+                            </div>
+
+                            <Code>
+                              {formatJson(schema)}
+                            </Code>
+                          </div>
+                        ) : (
+                          <div className="text-[13px] text-[#888]">
+                            No response schema defined.
+                          </div>
+                        )}
+                      </div>
+                    )
+                  },
+                )}
+              </div>
+            )}
           </div>
         )
       })}
@@ -427,7 +677,11 @@ export default function EndpointDetails({
     <div>
       {/* Back */}
       <button
-        onClick={() => navigate('explorer')}
+        onClick={() =>
+          navigate('explorer', {
+            specificationId: ep.api_specification_id,
+          })
+        }
         className="flex items-center gap-1.5 text-[13px] text-[#888] mb-5 hover:text-[#1a1a1a] transition-colors"
         style={{
           background: 'none',

@@ -55,7 +55,9 @@ class LLMTestCaseGenerator(TestCaseGenerator):
                                 },
                             },
                         },
-                        "required": ["test_cases"],
+                        "required": [
+                            "test_cases",
+                        ],
                         "additionalProperties": False,
                     },
                 },
@@ -64,9 +66,16 @@ class LLMTestCaseGenerator(TestCaseGenerator):
 
         result = self._llm_provider.generate(generation_request)
 
+        print("\n===== RAW LLM TEST CASE RESPONSE =====")
+        print(result.content)
+        print("===== END RAW LLM TEST CASE RESPONSE =====\n")
+
         return self._parse_result(result.content)
 
-    def _parse_result(self, content: str) -> TestCaseGenerationResult:
+    def _parse_result(
+        self,
+        content: str,
+    ) -> TestCaseGenerationResult:
         try:
             payload = json.loads(content)
         except json.JSONDecodeError as exc:
@@ -81,7 +90,7 @@ class LLMTestCaseGenerator(TestCaseGenerator):
 
         if not isinstance(raw_test_cases, list) or not raw_test_cases:
             raise ValueError(
-                "LLM test case response must contain a non-empty 'test_cases' list."
+                "LLM test case response must contain a non-empty " "'test_cases' list."
             )
 
         test_cases: list[GeneratedTestCase] = []
@@ -99,13 +108,38 @@ class LLMTestCaseGenerator(TestCaseGenerator):
             if not isinstance(description, str):
                 raise TypeError("Generated test case description must be a string.")
 
+            normalized_description = self._normalize_description(
+                description,
+            )
+
             test_cases.append(
                 GeneratedTestCase(
                     category=category,
-                    description=description,
+                    description=normalized_description,
                 )
             )
 
         return TestCaseGenerationResult(
             test_cases=test_cases,
         )
+
+    @staticmethod
+    def _normalize_description(
+        description: str,
+    ) -> str:
+        """
+        Normalize line-break escape sequences that an LLM may return
+        literally inside the JSON string.
+
+        Valid JSON decoding normally converts escaped newlines into
+        actual newline characters. Some providers can nevertheless
+        return double-escaped sequences such as '\\n'. Those sequences
+        are converted here so downstream AST validation receives real
+        source code.
+        """
+
+        normalized = description.replace("\\r\\n", "\n")
+        normalized = normalized.replace("\\n", "\n")
+        normalized = normalized.replace("\\r", "\n")
+
+        return normalized

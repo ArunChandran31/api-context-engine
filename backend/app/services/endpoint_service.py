@@ -48,7 +48,10 @@ class EndpointService:
             security=endpoint.security,
         )
 
-        return self.repository.add(db, entity)
+        return self.repository.add(
+            db,
+            entity,
+        )
 
     def create(
         self,
@@ -124,6 +127,22 @@ class EndpointService:
         except Exception:
             db.rollback()
             raise
+
+    def delete_by_specification(
+        self,
+        db: Session,
+        specification_id: int,
+    ) -> int:
+        """
+        Delete all endpoints belonging to a specification.
+
+        This method does NOT commit or rollback.
+        """
+
+        return self.repository.delete_by_specification(
+            db,
+            specification_id,
+        )
 
     def get(
         self,

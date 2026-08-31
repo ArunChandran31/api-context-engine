@@ -1,9 +1,11 @@
+import logging
 from time import sleep
 from typing import cast
 
 from groq import (
     APIConnectionError,
     APITimeoutError,
+    BadRequestError,
     Groq,
     InternalServerError,
     RateLimitError,
@@ -14,6 +16,8 @@ from groq.types.chat.completion_create_params import ResponseFormat
 from app.ai.exceptions import LLMProviderError
 from app.ai.models import GenerationRequest, GenerationResult
 from app.ai.provider import LLMProvider
+
+logger = logging.getLogger(__name__)
 
 
 class GroqLLMProvider(LLMProvider):
@@ -74,18 +78,26 @@ class GroqLLMProvider(LLMProvider):
             else None
         )
 
+        # Keep the original requested format for the first attempt.
+        current_response_format = response_format
+        json_schema_fallback_used = False
+
         for attempt in range(self._max_retries + 1):
             try:
-                if response_format is None:
+                if current_response_format is None:
                     completion = self._client.chat.completions.create(
                         model=self._model,
                         messages=messages,
+                        max_tokens=request.max_tokens,
+                        temperature=request.temperature,
                     )
                 else:
                     completion = self._client.chat.completions.create(
                         model=self._model,
                         messages=messages,
-                        response_format=response_format,
+                        response_format=current_response_format,
+                        max_tokens=request.max_tokens,
+                        temperature=request.temperature,
                     )
 
                 content = completion.choices[0].message.content
@@ -104,8 +116,7 @@ class GroqLLMProvider(LLMProvider):
                         status_code=504,
                     ) from exc
 
-                delay = self._retry_backoff_seconds * (2**attempt)
-                sleep(delay)
+                self._sleep_before_retry(attempt)
 
             except RateLimitError as exc:
                 if attempt >= self._max_retries:
@@ -114,8 +125,7 @@ class GroqLLMProvider(LLMProvider):
                         status_code=429,
                     ) from exc
 
-                delay = self._retry_backoff_seconds * (2**attempt)
-                sleep(delay)
+                self._sleep_before_retry(attempt)
 
             except (APIConnectionError, InternalServerError) as exc:
                 if attempt >= self._max_retries:
@@ -124,7 +134,100 @@ class GroqLLMProvider(LLMProvider):
                         status_code=503,
                     ) from exc
 
-                delay = self._retry_backoff_seconds * (2**attempt)
-                sleep(delay)
+                self._sleep_before_retry(attempt)
+
+            except BadRequestError as exc:
+                logger.error(
+                    "Groq BadRequestError: %s",
+                    self._extract_error_payload(exc),
+                )
+
+                if self._is_json_validation_error(exc):
+                    if attempt >= self._max_retries:
+                        raise LLMProviderError(
+                            (
+                                "LLM provider failed to generate valid structured "
+                                "JSON after multiple attempts."
+                            ),
+                            status_code=502,
+                        ) from exc
+
+                    # Groq can reject a strict JSON schema even when the model
+                    # can produce valid JSON. On the first validation failure,
+                    # retry once using the simpler JSON-object format.
+                    if (
+                        response_format is not None
+                        and response_format.get("type") == "json_schema"
+                        and not json_schema_fallback_used
+                    ):
+                        current_response_format = cast(
+                            ResponseFormat,
+                            {
+                                "type": "json_object",
+                            },
+                        )
+                        json_schema_fallback_used = True
+
+                    self._sleep_before_retry(attempt)
+                    continue
+
+                raise LLMProviderError(
+                    "LLM provider rejected the generation request.",
+                    status_code=400,
+                ) from exc
 
         raise RuntimeError("Groq generation failed unexpectedly.")
+
+    def _sleep_before_retry(
+        self,
+        attempt: int,
+    ) -> None:
+        delay = self._retry_backoff_seconds * (2**attempt)
+        sleep(delay)
+
+    @staticmethod
+    def _is_json_validation_error(
+        exc: BadRequestError,
+    ) -> bool:
+        """
+        Return True when Groq rejected the generated output because
+        it failed structured JSON validation.
+        """
+
+        response = getattr(exc, "response", None)
+
+        if response is None:
+            return False
+
+        try:
+            payload = response.json()
+        except (AttributeError, TypeError, ValueError):
+            return False
+
+        if not isinstance(payload, dict):
+            return False
+
+        error = payload.get("error")
+
+        if not isinstance(error, dict):
+            return False
+
+        return error.get("code") == "json_validate_failed"
+
+    @staticmethod
+    def _extract_error_payload(
+        exc: BadRequestError,
+    ) -> object:
+        """
+        Extract the provider error payload for diagnostic logging.
+        """
+
+        response = getattr(exc, "response", None)
+
+        if response is None:
+            return str(exc)
+
+        try:
+            return response.json()
+        except (AttributeError, TypeError, ValueError):
+            return str(exc)

@@ -10,6 +10,8 @@ class ApiSpecificationCreate(BaseSchema):
 
     description: str | None = None
 
+    base_url: str | None = None
+
     source_file: str = Field(..., max_length=255)
 
 
@@ -29,5 +31,7 @@ class ApiSpecificationResponse(TimestampSchema):
     version: str | None = None
 
     description: str | None
+
+    base_url: str | None = None
 
     source_file: str

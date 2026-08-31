@@ -11,8 +11,11 @@ from app.api.debug import router as debug_router
 from app.api.endpoints import router as endpoint_router
 from app.api.health import router as health_router
 from app.api.rag import router as rag_router
+from app.api.settings import router as settings_router
 from app.api.specifications import router as specification_router
-from app.api.test_cases import router as test_case_router
+from app.api.test_cases import (
+    router as test_case_router,
+)
 from app.api.upload import router as upload_router
 from app.core.config import settings
 from app.core.logging import configure_logging
@@ -36,6 +39,24 @@ async def lifespan(app: FastAPI):
 
     Base.metadata.create_all(bind=engine)
     logger.info("Database initialized successfully.")
+
+    # Preload the RAG embedding model during application startup.
+    # This prevents the first AI request from paying the model-loading
+    # cost (~80+ seconds in the current environment).
+    try:
+        from app.rag.dependencies import get_rag_dependencies
+
+        rag_dependencies = get_rag_dependencies()
+
+        logger.info("Loading RAG embedding model...")
+
+        rag_dependencies.embedding_provider.warm_up()
+
+        logger.info("RAG embedding model loaded successfully.")
+
+    except Exception:
+        logger.exception("Failed to preload RAG embedding model.")
+        raise
 
     yield
 
@@ -120,6 +141,11 @@ app.include_router(
 
 app.include_router(
     test_case_router,
+    prefix="/api",
+)
+
+app.include_router(
+    settings_router,
     prefix="/api",
 )
 

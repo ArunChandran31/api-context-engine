@@ -4,6 +4,7 @@ import pytest
 from groq import (
     APIConnectionError,
     APITimeoutError,
+    BadRequestError,
     InternalServerError,
     RateLimitError,
 )
@@ -85,6 +86,8 @@ def test_groq_provider_generates_response() -> None:
                 "content": "Which endpoint creates a user?",
             }
         ],
+        max_tokens=None,
+        temperature=None,
     )
 
 
@@ -144,6 +147,45 @@ def test_groq_provider_rejects_non_positive_timeout() -> None:
 def _build_request() -> GenerationRequest:
     return GenerationRequest(
         prompt="Which endpoint creates a user?",
+    )
+
+
+def _build_structured_json_request() -> GenerationRequest:
+    return GenerationRequest(
+        prompt="Generate API test cases.",
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "api_test_cases",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "test_cases": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "category": {
+                                        "type": "string",
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                    },
+                                },
+                                "required": [
+                                    "category",
+                                    "description",
+                                ],
+                                "additionalProperties": False,
+                            },
+                        },
+                    },
+                    "required": ["test_cases"],
+                    "additionalProperties": False,
+                },
+            },
+        },
     )
 
 
@@ -411,3 +453,213 @@ def test_groq_provider_retries_on_internal_server_error() -> None:
         )
 
         assert client.chat.completions.create.call_count == 2
+
+
+def test_groq_provider_retries_on_json_validation_error() -> None:
+    with patch("app.ai.groq_provider.Groq") as groq_class:
+        client = MagicMock()
+        groq_class.return_value = client
+
+        error_response = MagicMock()
+        error_response.json.return_value = {
+            "error": {
+                "code": "json_validate_failed",
+                "message": "Failed to validate JSON. Please adjust your prompt.",
+            }
+        }
+
+        error = BadRequestError(
+            "Failed to validate JSON. Please adjust your prompt.",
+            response=error_response,
+            body={
+                "error": {
+                    "code": "json_validate_failed",
+                }
+            },
+        )
+
+        client.chat.completions.create.side_effect = [
+            error,
+            _build_successful_completion(),
+        ]
+
+        provider = GroqLLMProvider(
+            api_key="test-api-key",
+            model="test-model",
+            max_retries=1,
+            retry_backoff_seconds=1.0,
+        )
+
+        with patch("app.ai.groq_provider.sleep") as sleep:
+            result = provider.generate(_build_request())
+
+        assert result == GenerationResult(
+            content="POST /users creates a user.",
+        )
+
+        assert client.chat.completions.create.call_count == 2
+        sleep.assert_called_once_with(1.0)
+
+
+def test_groq_provider_falls_back_to_json_object_on_json_validation_error() -> None:
+    with patch("app.ai.groq_provider.Groq") as groq_class:
+        client = MagicMock()
+        groq_class.return_value = client
+
+        error_response = MagicMock()
+        error_response.json.return_value = {
+            "error": {
+                "code": "json_validate_failed",
+                "message": "Failed to validate JSON. Please adjust your prompt.",
+            }
+        }
+
+        error = BadRequestError(
+            "Failed to validate JSON. Please adjust your prompt.",
+            response=error_response,
+            body={
+                "error": {
+                    "code": "json_validate_failed",
+                }
+            },
+        )
+
+        client.chat.completions.create.side_effect = [
+            error,
+            _build_successful_completion(),
+        ]
+
+        provider = GroqLLMProvider(
+            api_key="test-api-key",
+            model="test-model",
+            max_retries=1,
+            retry_backoff_seconds=1.0,
+        )
+
+        with patch("app.ai.groq_provider.sleep") as sleep:
+            result = provider.generate(_build_structured_json_request())
+
+        assert result == GenerationResult(
+            content="POST /users creates a user.",
+        )
+
+        assert client.chat.completions.create.call_count == 2
+
+        first_call = client.chat.completions.create.call_args_list[0]
+        second_call = client.chat.completions.create.call_args_list[1]
+
+        assert first_call.kwargs["response_format"]["type"] == "json_schema"
+        assert second_call.kwargs["response_format"] == {
+            "type": "json_object",
+        }
+
+        sleep.assert_called_once_with(1.0)
+
+
+def test_groq_provider_returns_502_after_json_validation_retries_exhausted() -> None:
+    with patch("app.ai.groq_provider.Groq") as groq_class:
+        client = MagicMock()
+        groq_class.return_value = client
+
+        error_response = MagicMock()
+        error_response.json.return_value = {
+            "error": {
+                "code": "json_validate_failed",
+                "message": "Failed to validate JSON. Please adjust your prompt.",
+            }
+        }
+
+        error = BadRequestError(
+            "Failed to validate JSON. Please adjust your prompt.",
+            response=error_response,
+            body={
+                "error": {
+                    "code": "json_validate_failed",
+                }
+            },
+        )
+
+        client.chat.completions.create.side_effect = error
+
+        provider = GroqLLMProvider(
+            api_key="test-api-key",
+            model="test-model",
+            max_retries=2,
+            retry_backoff_seconds=1.0,
+        )
+
+        with patch("app.ai.groq_provider.sleep") as sleep, pytest.raises(
+            LLMProviderError,
+            match=(
+                "LLM provider failed to generate valid structured "
+                "JSON after multiple attempts."
+            ),
+        ) as exc_info:
+            provider.generate(_build_structured_json_request())
+
+        assert exc_info.value.status_code == 502
+
+        assert client.chat.completions.create.call_count == 3
+
+        first_call = client.chat.completions.create.call_args_list[0]
+        second_call = client.chat.completions.create.call_args_list[1]
+        third_call = client.chat.completions.create.call_args_list[2]
+
+        assert first_call.kwargs["response_format"]["type"] == "json_schema"
+
+        assert second_call.kwargs["response_format"] == {
+            "type": "json_object",
+        }
+
+        assert third_call.kwargs["response_format"] == {
+            "type": "json_object",
+        }
+
+        assert sleep.call_args_list == [
+            ((1.0,),),
+            ((2.0,),),
+        ]
+
+
+def test_groq_provider_does_not_retry_unrelated_bad_request() -> None:
+    with patch("app.ai.groq_provider.Groq") as groq_class:
+        client = MagicMock()
+        groq_class.return_value = client
+
+        error_response = MagicMock()
+        error_response.json.return_value = {
+            "error": {
+                "code": "invalid_request_error",
+                "message": "Invalid request.",
+            }
+        }
+
+        error = BadRequestError(
+            "Invalid request.",
+            response=error_response,
+            body={
+                "error": {
+                    "code": "invalid_request_error",
+                }
+            },
+        )
+
+        client.chat.completions.create.side_effect = error
+
+        provider = GroqLLMProvider(
+            api_key="test-api-key",
+            model="test-model",
+            max_retries=3,
+            retry_backoff_seconds=1.0,
+        )
+
+        with patch("app.ai.groq_provider.sleep") as sleep, pytest.raises(
+            LLMProviderError,
+            match="LLM provider rejected the generation request.",
+        ) as exc_info:
+            provider.generate(_build_request())
+
+        assert exc_info.value.status_code == 400
+
+        assert client.chat.completions.create.call_count == 1
+        sleep.assert_not_called()

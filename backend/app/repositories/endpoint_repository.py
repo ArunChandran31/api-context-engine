@@ -19,7 +19,7 @@ class EndpointRepository(BaseRepository[Endpoint]):
         specification_id: int,
     ) -> list[Endpoint]:
         statement = select(Endpoint).where(
-            Endpoint.api_specification_id == specification_id
+            Endpoint.api_specification_id == specification_id,
         )
 
         return list(db.scalars(statement).all())
@@ -29,7 +29,9 @@ class EndpointRepository(BaseRepository[Endpoint]):
         db: Session,
         method: str,
     ) -> list[Endpoint]:
-        statement = select(Endpoint).where(Endpoint.method == method.upper())
+        statement = select(Endpoint).where(
+            Endpoint.method == method.upper(),
+        )
 
         return list(db.scalars(statement).all())
 
@@ -38,7 +40,9 @@ class EndpointRepository(BaseRepository[Endpoint]):
         db: Session,
         path: str,
     ) -> list[Endpoint]:
-        statement = select(Endpoint).where(Endpoint.path == path)
+        statement = select(Endpoint).where(
+            Endpoint.path == path,
+        )
 
         return list(db.scalars(statement).all())
 
@@ -82,7 +86,34 @@ class EndpointRepository(BaseRepository[Endpoint]):
         statement = (
             select(func.count())
             .select_from(Endpoint)
-            .where(Endpoint.api_specification_id == specification_id)
+            .where(
+                Endpoint.api_specification_id == specification_id,
+            )
         )
 
         return db.scalar(statement) or 0
+
+    def delete_by_specification(
+        self,
+        db: Session,
+        specification_id: int,
+    ) -> int:
+        """
+        Delete all endpoints belonging to a specification.
+
+        The deletion is intentionally not committed here.
+        Transaction ownership remains with the caller.
+        """
+
+        endpoints = self.get_by_specification(
+            db,
+            specification_id,
+        )
+
+        for endpoint in endpoints:
+            self.delete(
+                db,
+                endpoint,
+            )
+
+        return len(endpoints)
