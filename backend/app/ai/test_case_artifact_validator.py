@@ -55,9 +55,7 @@ class TestCaseArtifactValidator:
             description = test_case.description.strip()
 
             if not description:
-                raise ValueError(
-                    "Generated pytest test case contains empty Python."
-                )
+                raise ValueError("Generated pytest test case contains empty Python.")
 
             try:
                 tree = ast.parse(description)
@@ -94,16 +92,10 @@ class TestCaseArtifactValidator:
     def _validate_pytest_assertion(
         tree: ast.AST,
     ) -> None:
-        assertions = [
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Assert)
-        ]
+        assertions = [node for node in ast.walk(tree) if isinstance(node, ast.Assert)]
 
         if not assertions:
-            raise ValueError(
-                "Generated pytest test case must contain an assertion."
-            )
+            raise ValueError("Generated pytest test case must contain an assertion.")
 
     @staticmethod
     def _validate_pytest_imports(
@@ -309,8 +301,7 @@ class TestCaseArtifactValidator:
 
             if not description:
                 raise ValueError(
-                    "Generated Jest test case contains empty "
-                    "JavaScript/TypeScript."
+                    "Generated Jest test case contains empty " "JavaScript/TypeScript."
                 )
 
             if not re.search(

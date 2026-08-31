@@ -158,13 +158,10 @@ def test_builder_creates_edge_case_for_explicit_constraint() -> None:
 
     assert len(edge_items) == 2
 
-    descriptions = " ".join(
-        item.description for item in edge_items
-    )
+    descriptions = " ".join(item.description for item in edge_items)
 
     assert "minimum=0" in descriptions
     assert "maximum=10000" in descriptions
-
 
 
 def test_builder_detects_authentication() -> None:
