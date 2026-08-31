@@ -55,6 +55,7 @@ class FakeIndexingService(RAGIndexingService):
         self.deleted_specification_ids.append(
             specification_id,
         )
+
         return self.deleted_count
 
     def index_document(
@@ -84,19 +85,26 @@ class FakePersistence(VectorStorePersistence):
 class FakeCacheService:
     def __init__(
         self,
-        deleted_count: int = 0,
+        rag_deleted_count: int = 0,
+        ai_deleted_count: int = 0,
     ) -> None:
-        self.deleted_count = deleted_count
+        self.rag_deleted_count = rag_deleted_count
+        self.ai_deleted_count = ai_deleted_count
         self.deleted_patterns: list[str] = []
 
     def delete_pattern(
         self,
         pattern: str,
     ) -> int:
-        self.deleted_patterns.append(
-            pattern,
-        )
-        return self.deleted_count
+        self.deleted_patterns.append(pattern)
+
+        if ":rag:query:" in pattern:
+            return self.rag_deleted_count
+
+        if ":ai:question:" in pattern:
+            return self.ai_deleted_count
+
+        return 0
 
 
 def build_specification(
@@ -177,7 +185,8 @@ def test_index_specification_returns_indexing_result() -> None:
     persistence = FakePersistence()
 
     cache_service = FakeCacheService(
-        deleted_count=4,
+        rag_deleted_count=4,
+        ai_deleted_count=0,
     )
 
     orchestrator = build_orchestrator(
@@ -200,6 +209,11 @@ def test_index_specification_returns_indexing_result() -> None:
     assert result.documents_indexed == 2
     assert result.chunks_indexed == 5
     assert result.cache_entries_invalidated == 4
+
+    assert cache_service.deleted_patterns == [
+        "api-context-engine:v1:rag:query:*:limit:*:specification:5",
+        "api-context-engine:v1:ai:question:*:specification:5:provider:*:model:*",
+    ]
 
 
 def test_index_specification_generates_and_indexes_all_documents() -> None:
@@ -344,7 +358,8 @@ def test_index_specification_invalidates_specification_cache() -> None:
     persistence = FakePersistence()
 
     cache_service = FakeCacheService(
-        deleted_count=3,
+        rag_deleted_count=3,
+        ai_deleted_count=0,
     )
 
     orchestrator = build_orchestrator(
@@ -362,6 +377,7 @@ def test_index_specification_invalidates_specification_cache() -> None:
 
     assert cache_service.deleted_patterns == [
         "api-context-engine:v1:rag:query:*:limit:*:specification:10",
+        "api-context-engine:v1:ai:question:*:specification:10:provider:*:model:*",
     ]
 
 
@@ -380,7 +396,8 @@ def test_index_specification_handles_empty_specification() -> None:
     persistence = FakePersistence()
 
     cache_service = FakeCacheService(
-        deleted_count=2,
+        rag_deleted_count=2,
+        ai_deleted_count=0,
     )
 
     orchestrator = build_orchestrator(
@@ -398,6 +415,11 @@ def test_index_specification_handles_empty_specification() -> None:
     assert result.documents_indexed == 0
     assert result.chunks_indexed == 0
     assert result.cache_entries_invalidated == 2
+
+    assert cache_service.deleted_patterns == [
+        "api-context-engine:v1:rag:query:*:limit:*:specification:11",
+        "api-context-engine:v1:ai:question:*:specification:11:provider:*:model:*",
+    ]
 
     assert indexing_service.deleted_specification_ids == [
         11,

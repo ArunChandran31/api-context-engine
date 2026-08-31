@@ -88,12 +88,16 @@ class GroqLLMProvider(LLMProvider):
                     completion = self._client.chat.completions.create(
                         model=self._model,
                         messages=messages,
+                        max_tokens=request.max_tokens,
+                        temperature=request.temperature,
                     )
                 else:
                     completion = self._client.chat.completions.create(
                         model=self._model,
                         messages=messages,
                         response_format=current_response_format,
+                        max_tokens=request.max_tokens,
+                        temperature=request.temperature,
                     )
 
                 content = completion.choices[0].message.content

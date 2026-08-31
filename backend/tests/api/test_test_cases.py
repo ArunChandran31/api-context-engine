@@ -8,9 +8,16 @@ from app.ai.test_case_models import (
 from app.api.test_cases import (
     get_ai_dependencies,
     router,
+    specification_service,
 )
+from app.core.auth import AuthenticatedUser, get_current_user
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+TEST_USER = AuthenticatedUser(
+    id="test-user-id",
+    email="test@example.com",
+)
 
 
 def create_test_client(
@@ -20,8 +27,21 @@ def create_test_client(
     app.include_router(router)
 
     app.dependency_overrides[get_ai_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_current_user] = lambda: TEST_USER
 
-    return TestClient(app)
+    # These tests focus on the test-case generation endpoint itself.
+    # Specification ownership is tested separately, so allow the
+    # specification lookup for this isolated router test.
+    original_belongs_to_user = specification_service.belongs_to_user
+    specification_service.belongs_to_user = MagicMock(return_value=True)
+
+    client = TestClient(app)
+
+    # Keep the reference on the client so it can be restored when
+    # the client is closed.
+    client._original_belongs_to_user = original_belongs_to_user  # type: ignore[attr-defined]
+
+    return client
 
 
 def test_generate_test_cases_returns_generated_cases() -> None:

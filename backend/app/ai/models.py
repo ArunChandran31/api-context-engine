@@ -13,10 +13,18 @@ class GenerationRequest:
 
     prompt: str
     response_format: dict[str, Any] | None = None
+    max_tokens: int | None = None
+    temperature: float | None = None
 
     def __post_init__(self) -> None:
         if not self.prompt.strip():
             raise ValueError("Generation prompt cannot be empty.")
+
+        if self.max_tokens is not None and self.max_tokens <= 0:
+            raise ValueError("Max tokens must be greater than zero.")
+
+        if self.temperature is not None and self.temperature < 0:
+            raise ValueError("Temperature cannot be negative.")
 
 
 @dataclass(frozen=True)

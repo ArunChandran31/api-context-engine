@@ -277,29 +277,15 @@ class TestPlanBuilder:
         context: str,
     ) -> list[TestPlanItem]:
         """
-        Generate edge-case plans only when explicit edge constraints
-        are documented.
+        Generate one grounded edge-case plan item per explicitly
+        documented edge constraint.
 
-        Merely seeing words such as:
-            enum
-            format
-            default
-            nullable
+        Merely seeing words such as enum, format, default, or nullable
+        is not sufficient to establish an edge case.
 
-        is not sufficient by itself to establish an edge case.
-
-        Explicit constraints such as:
-            minimum
-            maximum
-            exclusiveMinimum
-            exclusiveMaximum
-            minLength
-            maxLength
-            minItems
-            maxItems
-            pattern
-
-        are treated as grounded edge-case constraints.
+        Explicit constraints such as minimum, maximum, length,
+        collection boundaries, and pattern are treated as grounded
+        edge-case constraints.
         """
 
         edge_constraints = self._extract_edge_constraints(
@@ -309,29 +295,27 @@ class TestPlanBuilder:
         if not edge_constraints:
             return []
 
-        grounded_facts = [
-            "Explicit edge-related constraints are documented.",
-            "Only documented edge constraints may be tested.",
-        ]
+        items: list[TestPlanItem] = []
 
-        grounded_facts.extend(
-            f"Documented edge constraint: {constraint}."
-            for constraint in edge_constraints
-        )
-
-        return [
-            TestPlanItem(
-                category="edge",
-                description=(
-                    "Generate edge-case tests only for explicitly "
-                    "documented constraints. Test the documented "
-                    "minimum, maximum, length, pattern, collection "
-                    "boundary, or equivalent constraint without "
-                    "inferring additional boundary behavior."
-                ),
-                grounded_facts=tuple(dict.fromkeys(grounded_facts)),
+        for constraint in edge_constraints:
+            items.append(
+                TestPlanItem(
+                    category="edge",
+                    description=(
+                        "Generate an edge-case test specifically for "
+                        f"the documented constraint {constraint}. "
+                        "Use only the documented constraint and do not "
+                        "infer additional boundary behavior."
+                    ),
+                    grounded_facts=(
+                        "Explicit edge-related constraints are documented.",
+                        "Only documented edge constraints may be tested.",
+                        f"Documented edge constraint: {constraint}.",
+                    ),
+                )
             )
-        ]
+
+        return items
 
     # ------------------------------------------------------------------
     # AUTHENTICATION

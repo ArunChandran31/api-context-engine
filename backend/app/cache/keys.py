@@ -45,3 +45,52 @@ def build_rag_query_cache_pattern(
         f"limit:*:"
         f"specification:{specification_id}"
     )
+
+
+def build_ai_question_cache_key(
+    question: str,
+    specification_id: int,
+    provider: str,
+    model: str,
+) -> str:
+    """
+    Build a deterministic cache key for an AI question.
+    """
+    if specification_id <= 0:
+        raise ValueError("Specification ID must be greater than zero.")
+
+    normalized_question = " ".join(question.split())
+
+    question_hash = hashlib.sha256(
+        normalized_question.encode("utf-8"),
+    ).hexdigest()
+
+    return (
+        f"{CACHE_NAMESPACE}:"
+        f"{CACHE_VERSION}:"
+        f"ai:question:"
+        f"{question_hash}:"
+        f"specification:{specification_id}:"
+        f"provider:{provider}:"
+        f"model:{model}"
+    )
+
+
+def build_ai_question_cache_pattern(
+    specification_id: int,
+) -> str:
+    """
+    Build a Redis key pattern matching all cached AI questions
+    for a specific API specification.
+    """
+    if specification_id <= 0:
+        raise ValueError("Specification ID must be greater than zero.")
+
+    return (
+        f"{CACHE_NAMESPACE}:"
+        f"{CACHE_VERSION}:"
+        f"ai:question:*:"
+        f"specification:{specification_id}:"
+        f"provider:*:"
+        f"model:*"
+    )

@@ -2,7 +2,10 @@ import logging
 from dataclasses import dataclass
 from typing import Protocol
 
-from app.cache.keys import build_rag_query_cache_pattern
+from app.cache.keys import (
+    build_ai_question_cache_pattern,
+    build_rag_query_cache_pattern,
+)
 from app.database.models.api_specification import ApiSpecification
 from app.rag.context_generator import ContextGenerator
 from app.rag.indexing_service import RAGIndexingService
@@ -90,14 +93,24 @@ class RAGIndexingOrchestrator:
         # Persist the updated FAISS index and records.
         self._persistence.save()
 
-        # Any cached query result for this specification is now stale.
-        cache_pattern = build_rag_query_cache_pattern(
+        # Any cached RAG or AI result for this specification is now stale.
+        rag_cache_pattern = build_rag_query_cache_pattern(
             specification.id,
         )
 
-        deleted_cache_entries = self._cache_service.delete_pattern(
-            cache_pattern,
+        ai_cache_pattern = build_ai_question_cache_pattern(
+            specification.id,
         )
+
+        deleted_rag_cache_entries = self._cache_service.delete_pattern(
+            rag_cache_pattern,
+        )
+
+        deleted_ai_cache_entries = self._cache_service.delete_pattern(
+            ai_cache_pattern,
+        )
+
+        deleted_cache_entries = deleted_rag_cache_entries + deleted_ai_cache_entries
 
         result = RAGIndexingResult(
             specification_id=specification.id,

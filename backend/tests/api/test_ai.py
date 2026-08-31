@@ -1,13 +1,43 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from app.ai.dependencies import AIDependencies
 from app.ai.exceptions import LLMProviderError
 from app.ai.models import GenerationResult
 from app.ai.question_answering_service import QuestionAnswerResult
 from app.api.ai import get_ai_dependencies
+from app.core.auth import AuthenticatedUser, get_current_user
+from app.database.models.api_specification import ApiSpecification
 from app.main import app
 from app.rag.retrieval_service import RetrievalResult
 from fastapi.testclient import TestClient
+
+TEST_USER = AuthenticatedUser(
+    id="test-user-id",
+    email="test@example.com",
+)
+
+
+def mock_specification(specification_id: int) -> ApiSpecification:
+    return ApiSpecification(
+        id=specification_id,
+        title="Test API",
+        version="1.0",
+        description="Test API description",
+        base_url="http://example.com",
+        source_file="test-api.json",
+        user_id=TEST_USER.id,
+    )
+
+
+def setup_client(dependencies: AIDependencies) -> TestClient:
+    app.dependency_overrides[get_ai_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_current_user] = lambda: TEST_USER
+
+    return TestClient(app)
+
+
+def cleanup_client() -> None:
+    app.dependency_overrides.clear()
 
 
 def test_question_endpoint_returns_answer() -> None:
@@ -31,19 +61,22 @@ def test_question_endpoint_returns_answer() -> None:
         debug_service=MagicMock(),
     )
 
-    app.dependency_overrides[get_ai_dependencies] = lambda: dependencies
+    client = setup_client(dependencies)
 
-    client = TestClient(app)
-
-    response = client.post(
-        "/api/ai/question",
-        json={
-            "question": "Which endpoint creates a pet?",
-            "specification_id": 3,
-        },
-    )
-
-    app.dependency_overrides.clear()
+    try:
+        with patch(
+            "app.api.ai.specification_service.repository.get_by_id_for_user",
+            return_value=mock_specification(3),
+        ):
+            response = client.post(
+                "/api/ai/question",
+                json={
+                    "question": "Which endpoint creates a pet?",
+                    "specification_id": 3,
+                },
+            )
+    finally:
+        cleanup_client()
 
     assert response.status_code == 200
 
@@ -98,19 +131,22 @@ def test_question_endpoint_returns_answer_with_sources() -> None:
         debug_service=MagicMock(),
     )
 
-    app.dependency_overrides[get_ai_dependencies] = lambda: dependencies
+    client = setup_client(dependencies)
 
-    client = TestClient(app)
-
-    response = client.post(
-        "/api/ai/question",
-        json={
-            "question": "What endpoint retrieves a product by ID?",
-            "specification_id": 6,
-        },
-    )
-
-    app.dependency_overrides.clear()
+    try:
+        with patch(
+            "app.api.ai.specification_service.repository.get_by_id_for_user",
+            return_value=mock_specification(6),
+        ):
+            response = client.post(
+                "/api/ai/question",
+                json={
+                    "question": "What endpoint retrieves a product by ID?",
+                    "specification_id": 6,
+                },
+            )
+    finally:
+        cleanup_client()
 
     assert response.status_code == 200
 
@@ -134,15 +170,18 @@ def test_question_endpoint_returns_answer_with_sources() -> None:
 
 
 def test_question_endpoint_rejects_empty_question() -> None:
-    client = TestClient(app)
+    client = setup_client(MagicMock(spec=AIDependencies))
 
-    response = client.post(
-        "/api/ai/question",
-        json={
-            "question": "",
-            "specification_id": 3,
-        },
-    )
+    try:
+        response = client.post(
+            "/api/ai/question",
+            json={
+                "question": "",
+                "specification_id": 3,
+            },
+        )
+    finally:
+        cleanup_client()
 
     assert response.status_code == 422
 
@@ -165,19 +204,22 @@ def test_question_endpoint_returns_503_for_llm_provider_error() -> None:
         debug_service=MagicMock(),
     )
 
-    app.dependency_overrides[get_ai_dependencies] = lambda: dependencies
+    client = setup_client(dependencies)
 
-    client = TestClient(app)
-
-    response = client.post(
-        "/api/ai/question",
-        json={
-            "question": "Which endpoint creates a pet?",
-            "specification_id": 3,
-        },
-    )
-
-    app.dependency_overrides.clear()
+    try:
+        with patch(
+            "app.api.ai.specification_service.repository.get_by_id_for_user",
+            return_value=mock_specification(3),
+        ):
+            response = client.post(
+                "/api/ai/question",
+                json={
+                    "question": "Which endpoint creates a pet?",
+                    "specification_id": 3,
+                },
+            )
+    finally:
+        cleanup_client()
 
     assert response.status_code == 503
 
@@ -206,19 +248,22 @@ def test_question_endpoint_preserves_llm_provider_status_code() -> None:
         debug_service=MagicMock(),
     )
 
-    app.dependency_overrides[get_ai_dependencies] = lambda: dependencies
+    client = setup_client(dependencies)
 
-    client = TestClient(app)
-
-    response = client.post(
-        "/api/ai/question",
-        json={
-            "question": "Which endpoint creates a pet?",
-            "specification_id": 3,
-        },
-    )
-
-    app.dependency_overrides.clear()
+    try:
+        with patch(
+            "app.api.ai.specification_service.repository.get_by_id_for_user",
+            return_value=mock_specification(3),
+        ):
+            response = client.post(
+                "/api/ai/question",
+                json={
+                    "question": "Which endpoint creates a pet?",
+                    "specification_id": 3,
+                },
+            )
+    finally:
+        cleanup_client()
 
     assert response.status_code == 429
 

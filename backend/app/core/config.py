@@ -64,6 +64,20 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------
+    # Supabase Authentication
+    # ------------------------------------------------------------------
+
+    supabase_url: str | None = Field(
+        default=None,
+        alias="SUPABASE_URL",
+    )
+
+    supabase_publishable_key: str | None = Field(
+        default=None,
+        alias="SUPABASE_PUBLISHABLE_KEY",
+    )
+
+    # ------------------------------------------------------------------
     # RAG
     # ------------------------------------------------------------------
 

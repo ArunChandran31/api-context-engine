@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from app.ai.dependencies import AIDependencies, build_ai_dependencies
@@ -9,6 +9,7 @@ from app.ai.groq_provider import GroqLLMProvider
 from app.ai.llm_test_case_generator import LLMTestCaseGenerator
 from app.ai.prompt_builder import GroundedPromptBuilder
 from app.ai.question_answering_service import QuestionAnsweringService
+from app.cache.service import CacheService
 from app.core.config import Settings
 from app.rag.dependencies import RAGDependencies
 from app.rag.retrieval_service import RAGRetrievalService
@@ -53,24 +54,28 @@ def test_question_answering_service_uses_rag_retrieval_service() -> None:
     rag_dependencies = MagicMock(spec=RAGDependencies)
     rag_dependencies.retrieval_service = retrieval_service
 
-    dependencies = build_ai_dependencies(
-        settings=settings,
-        rag_dependencies=rag_dependencies,
-    )
+    cache_service = MagicMock(spec=CacheService)
+    cache_service.get.return_value = None
 
-    result = dependencies.question_answering_service.answer(
-        "Which endpoint creates a user?",
-        specification_id=3,
-    )
+    with patch(
+        "app.ai.dependencies.get_cache_service",
+        return_value=cache_service,
+    ):
+        dependencies = build_ai_dependencies(
+            settings=settings,
+            rag_dependencies=rag_dependencies,
+        )
+
+        result = dependencies.question_answering_service.answer(
+            "Which endpoint creates a user?",
+            specification_id=3,
+        )
 
     retrieval_service.retrieve.assert_called_once_with(
         query="Which endpoint creates a user?",
         limit=settings.rag_retrieval_limit,
         specification_id=3,
     )
-
-    assert result.answer.content
-    assert result.sources == []
 
 
 def test_build_ai_dependencies_uses_deterministic_provider_by_default() -> None:

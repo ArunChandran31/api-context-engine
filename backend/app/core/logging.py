@@ -14,10 +14,16 @@ class RAGLogFormatter(logging.Formatter):
             "cache_hit",
             "cache_get_ms",
             "retrieval_ms",
+            "embedding_ms",
+            "search_ms",
+            "reconstruction_ms",
             "cache_set_ms",
             "total_ms",
             "result_count",
             "cache_key",
+            "prompt_ms",
+            "generation_ms",
+            "context_count",
         ):
             if hasattr(record, field):
                 extra_fields.append(f"{field}={getattr(record, field)}")

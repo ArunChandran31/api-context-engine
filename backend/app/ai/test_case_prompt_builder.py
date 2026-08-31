@@ -62,9 +62,14 @@ class TestCasePromptBuilder:
 
         style_instructions = {
             "jest": (
-                "Generate Jest-compatible JavaScript or TypeScript "
-                "test cases. Use describe/it or test blocks where "
-                "appropriate."
+                "Generate executable Jest-compatible JavaScript or TypeScript "
+                "test cases. Every generated test case description MUST contain "
+                "actual Jest code, not a prose-only explanation. Every Jest test "
+                "case MUST contain at least one `test(...)` or `it(...)` block "
+                "and at least one `expect(...)` assertion. A `describe(...)` "
+                "block may be used to group tests but does not replace the "
+                "required test/it block. Keep all API-specific values grounded "
+                "in the supplied API Context and Test Plan."
             ),
             "pytest": (
                 "Generate pytest-compatible Python test cases. "

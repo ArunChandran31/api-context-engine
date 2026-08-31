@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.core.auth import AuthenticatedUser, get_current_user
 from app.database.session import get_db
 from app.exceptions import (
     EmptyUploadError,
@@ -23,11 +24,6 @@ router = APIRouter(
 def get_upload_service(
     rag_dependencies: RAGDependencies,
 ) -> UploadService:
-    """
-    Build the upload service from the application's
-    shared RAG dependency graph.
-    """
-
     return UploadService(
         rag_indexing_orchestrator=rag_dependencies.indexing_orchestrator,
     )
@@ -72,18 +68,16 @@ async def upload_specification(
         RAGDependencies,
         Depends(get_rag_dependencies),
     ],
+    current_user: Annotated[
+        AuthenticatedUser,
+        Depends(get_current_user),
+    ],
 ):
-    """
-    Upload and ingest an OpenAPI JSON or YAML specification.
-    """
-
     upload_service = get_upload_service(
         rag_dependencies,
     )
 
-    filename = validate_filename(
-        file.filename,
-    )
+    filename = validate_filename(file.filename)
 
     try:
         content = await file.read()
@@ -92,6 +86,7 @@ async def upload_specification(
             db=db,
             content=content,
             filename=filename,
+            user=current_user,
         )
 
     except EmptyUploadError as exc:
@@ -132,18 +127,16 @@ async def replace_specification(
         RAGDependencies,
         Depends(get_rag_dependencies),
     ],
+    current_user: Annotated[
+        AuthenticatedUser,
+        Depends(get_current_user),
+    ],
 ):
-    """
-    Replace an existing OpenAPI specification and re-index it.
-    """
-
     upload_service = get_upload_service(
         rag_dependencies,
     )
 
-    filename = validate_filename(
-        file.filename,
-    )
+    filename = validate_filename(file.filename)
 
     try:
         content = await file.read()
@@ -153,6 +146,7 @@ async def replace_specification(
             specification_id=specification_id,
             content=content,
             filename=filename,
+            user=current_user,
         )
 
     except ValueError as exc:

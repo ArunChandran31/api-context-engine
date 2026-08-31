@@ -77,4 +77,8 @@ class GroundedPromptBuilder:
             "ANSWER:"
         )
 
-        return GenerationRequest(prompt=prompt)
+        return GenerationRequest(
+            prompt=prompt,
+            max_tokens=256,
+            temperature=0.0,
+        )

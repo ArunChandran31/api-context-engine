@@ -32,6 +32,7 @@ from app.ai.test_case_prompt_builder import (
     TestCasePromptBuilder,
 )
 from app.ai.test_case_validator import TestCaseGroundingValidator
+from app.cache.dependencies import get_cache_service
 from app.core.config import Settings
 from app.core.runtime_settings import get_effective_settings
 from app.rag.dependencies import (
@@ -188,10 +189,13 @@ def build_ai_dependencies(
 
     prompt_builder = GroundedPromptBuilder()
 
+    cache_service = get_cache_service()
+
     question_answering_service = QuestionAnsweringService(
         retrieval_service=rag.retrieval_service,
         prompt_builder=prompt_builder,
         llm_provider=llm_provider,
+        cache_service=cache_service,
         retrieval_limit=application_settings.rag_retrieval_limit,
     )
 

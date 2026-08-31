@@ -66,6 +66,10 @@ class LLMTestCaseGenerator(TestCaseGenerator):
 
         result = self._llm_provider.generate(generation_request)
 
+        print("\n===== RAW LLM TEST CASE RESPONSE =====")
+        print(result.content)
+        print("===== END RAW LLM TEST CASE RESPONSE =====\n")
+
         return self._parse_result(result.content)
 
     def _parse_result(
@@ -80,38 +84,29 @@ class LLMTestCaseGenerator(TestCaseGenerator):
             ) from exc
 
         if not isinstance(payload, dict):
-            raise TypeError(
-                "LLM test case response must be a JSON object."
-            )
+            raise TypeError("LLM test case response must be a JSON object.")
 
         raw_test_cases = payload.get("test_cases")
 
         if not isinstance(raw_test_cases, list) or not raw_test_cases:
             raise ValueError(
-                "LLM test case response must contain a non-empty "
-                "'test_cases' list."
+                "LLM test case response must contain a non-empty " "'test_cases' list."
             )
 
         test_cases: list[GeneratedTestCase] = []
 
         for item in raw_test_cases:
             if not isinstance(item, dict):
-                raise TypeError(
-                    "Each generated test case must be a JSON object."
-                )
+                raise TypeError("Each generated test case must be a JSON object.")
 
             category = item.get("category")
             description = item.get("description")
 
             if not isinstance(category, str):
-                raise TypeError(
-                    "Generated test case category must be a string."
-                )
+                raise TypeError("Generated test case category must be a string.")
 
             if not isinstance(description, str):
-                raise TypeError(
-                    "Generated test case description must be a string."
-                )
+                raise TypeError("Generated test case description must be a string.")
 
             normalized_description = self._normalize_description(
                 description,

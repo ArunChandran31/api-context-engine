@@ -38,12 +38,26 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProvider):
 
     def warm_up(self) -> None:
         """
-        Load the Sentence Transformer model into memory.
+        Load and fully initialize the Sentence Transformer model.
 
-        This is intended to be called during application startup so
-        the first embedding request does not pay the model-loading cost.
+        This is intended to be called during application startup so the
+        first real embedding request does not pay model-loading or
+        first-inference initialization costs.
         """
-        self._get_model()
+        model = self._get_model()
+
+        warm_up_texts = [
+            "API context engine warm-up query",
+            "What fields are required in the product request body?",
+            "Which authentication mechanism is required for the product endpoint?",
+            "What HTTP status codes are documented for replacing a product?",
+        ]
+
+        model.encode(
+            warm_up_texts,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+        )
 
     def embed(self, text: str) -> list[float]:
         if not text.strip():

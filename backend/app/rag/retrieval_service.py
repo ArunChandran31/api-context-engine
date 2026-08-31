@@ -4,6 +4,7 @@ from typing import Any
 
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.vector_store import VectorSearchResult, VectorStore
+from app.utils.timing import Timer
 
 
 @dataclass(frozen=True)
@@ -57,6 +58,12 @@ class RAGRetrievalService:
         self._embedding_provider = embedding_provider
         self._vector_store = vector_store
 
+        self.last_timing = {
+            "embedding_ms": 0.0,
+            "search_ms": 0.0,
+            "reconstruction_ms": 0.0,
+        }
+
     def retrieve(
         self,
         query: str,
@@ -85,7 +92,12 @@ class RAGRetrievalService:
         if specification_id is not None and specification_id <= 0:
             raise ValueError("Specification ID must be greater than zero.")
 
+        embedding_timer = Timer()
+        embedding_timer.start()
+
         query_vector = self._embedding_provider.embed(query)
+
+        embedding_ms = embedding_timer.stop()
 
         # Retrieve a larger candidate pool than the requested result count.
         #
@@ -93,10 +105,15 @@ class RAGRetrievalService:
         # belonging to the same endpoint.
         search_limit = max(limit * 10, 50)
 
+        search_timer = Timer()
+        search_timer.start()
+
         search_results = self._vector_store.search(
             query_vector=query_vector,
             limit=search_limit,
         )
+
+        search_ms = search_timer.stop()
 
         filtered_results = [
             result
@@ -115,10 +132,23 @@ class RAGRetrievalService:
                 intents=endpoint_intents,
             )
 
-        return self._reconstruct_endpoint_results(
+        reconstruction_timer = Timer()
+        reconstruction_timer.start()
+
+        results = self._reconstruct_endpoint_results(
             filtered_results,
             limit=limit,
         )
+
+        reconstruction_ms = reconstruction_timer.stop()
+
+        self.last_timing = {
+            "embedding_ms": round(embedding_ms, 2),
+            "search_ms": round(search_ms, 2),
+            "reconstruction_ms": round(reconstruction_ms, 2),
+        }
+
+        return results
 
     @staticmethod
     def _extract_endpoint_intents(

@@ -354,6 +354,30 @@ class TestCaseGenerationService:
                 "`import pytest`.\n"
             )
 
+        elif "must contain a Jest test block" in error_message:
+            artifact_feedback += (
+                "\nJEST TEST STRUCTURE REQUIREMENTS:\n"
+                "- The generated Jest test case MUST contain at least "
+                "one real Jest test block.\n"
+                "- Use `test(...)` or `it(...)` for the test block.\n"
+                "- A `describe(...)` block alone is not sufficient unless "
+                "it contains a nested `test(...)` or `it(...)` block.\n"
+                "- The test block MUST contain a real `expect(...)` assertion.\n"
+                "- Return executable JavaScript or TypeScript test code, "
+                "not prose describing a test.\n"
+            )
+
+        elif "must contain a Jest assertion" in error_message:
+            artifact_feedback += (
+                "\nJEST ASSERTION REQUIREMENTS:\n"
+                "- The generated Jest test case MUST contain at least "
+                "one real `expect(...)` assertion.\n"
+                "- The assertion must verify behavior supported by the "
+                "API documentation.\n"
+                "- Do not use a meaningless assertion merely to satisfy "
+                "validation.\n"
+            )
+
         artifact_feedback += (
             "\nIMPORTANT:\n"
             "Return ONLY the JSON structure requested by the original "

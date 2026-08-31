@@ -85,6 +85,8 @@ def test_groq_provider_generates_response() -> None:
                 "content": "Which endpoint creates a user?",
             }
         ],
+        max_tokens=None,
+        temperature=None,
     )
 
 
