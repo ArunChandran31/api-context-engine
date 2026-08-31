@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getAIQueryCount } from '../utils/sessionMetrics'
 import type { Page } from '../utils'
 import { CARD, BTN_PRIMARY, BTN_SECONDARY } from '../utils'
 import {
@@ -39,6 +40,24 @@ function StatCard({
         </div>
       )}
     </div>
+  )
+}
+
+function IndexedBadge() {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium"
+      style={{
+        background: '#dcfce7',
+        color: '#15803d',
+      }}
+    >
+      <span
+        className="w-1.5 h-1.5 rounded-full"
+        style={{ background: '#22c55e' }}
+      />
+      Indexed
+    </span>
   )
 }
 
@@ -129,6 +148,27 @@ export default function Dashboard({ navigate }: Props) {
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [aiQueryCount, setAIQueryCount] = useState(
+    getAIQueryCount(),
+  )
+
+  useEffect(() => {
+    function handleAIQueryCountChanged() {
+      setAIQueryCount(getAIQueryCount())
+    }
+
+    window.addEventListener(
+      'ai-query-count-changed',
+      handleAIQueryCountChanged,
+    )
+
+    return () => {
+      window.removeEventListener(
+        'ai-query-count-changed',
+        handleAIQueryCountChanged,
+      )
+    }
+  }, [])
 
   useEffect(() => {
     async function loadDashboard() {
@@ -288,8 +328,8 @@ export default function Dashboard({ navigate }: Props) {
 
         <StatCard
           label="AI Queries"
-          value="—"
-          sub="session tracking coming soon"
+          value={loading ? '—' : aiQueryCount}
+          sub="this session"
         />
 
         <div
@@ -371,7 +411,7 @@ export default function Dashboard({ navigate }: Props) {
                   </th>
 
                   <th className="text-left px-5 py-3 text-[12px] text-[#aaa] font-medium">
-                    Last updated
+                    Added
                   </th>
 
                   <th className="text-left px-5 py-3 text-[12px] text-[#aaa] font-medium">
@@ -425,7 +465,7 @@ export default function Dashboard({ navigate }: Props) {
                         </td>
 
                         <td className="px-5 py-3.5">
-                          <StatusBadge status="Healthy" />
+                          <IndexedBadge />
                         </td>
 
                         <td className="px-5 py-3.5 text-right">

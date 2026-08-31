@@ -1,4 +1,7 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { supabase } from './lib/supabase'
+import type { User } from '@supabase/supabase-js'
+import Login from './pages/Login'
 import type { Page } from './utils'
 import { GLASS } from './utils'
 import Dashboard from './pages/Dashboard'
@@ -12,9 +15,19 @@ import SystemStatus from './pages/SystemStatus'
 import Settings from './pages/Settings'
 
 // ── Icons ────────────────────────────────────────────────────────────────────
+
 function Ico({ d, size = 18 }: { d: string; size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d={d} />
     </svg>
   )
@@ -31,12 +44,18 @@ const NAV_ITEMS: { id: Page; label: string; paths: string[] }[] = [
   {
     id: 'explorer',
     label: 'API Explorer',
-    paths: ['M12 2L2 7l10 5 10-5-10-5', 'M2 17l10 5 10-5', 'M2 12l10 5 10-5'],
+    paths: [
+      'M12 2L2 7l10 5 10-5-10-5',
+      'M2 17l10 5 10-5',
+      'M2 12l10 5 10-5',
+    ],
   },
   {
     id: 'assistant',
     label: 'AI Assistant',
-    paths: ['M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z'],
+    paths: [
+      'M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z',
+    ],
   },
   {
     id: 'debug',
@@ -52,12 +71,17 @@ const NAV_ITEMS: { id: Page; label: string; paths: string[] }[] = [
   {
     id: 'tests',
     label: 'Test Cases',
-    paths: ['M9 11l3 3L22 4', 'M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11'],
+    paths: [
+      'M9 11l3 3L22 4',
+      'M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11',
+    ],
   },
   {
     id: 'status',
     label: 'System Status',
-    paths: ['M22 12h-4l-3 9L9 3l-3 9H2'],
+    paths: [
+      'M22 12h-4l-3 9L9 3l-3 9H2',
+    ],
   },
   {
     id: 'settings',
@@ -71,14 +95,32 @@ const NAV_ITEMS: { id: Page; label: string; paths: string[] }[] = [
 
 function NavIcon({ paths }: { paths: string[] }) {
   return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-      {paths.map((d, i) => <path key={i} d={d} />)}
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {paths.map((d, i) => (
+        <path key={i} d={d} />
+      ))}
     </svg>
   )
 }
 
 // ── Profile dropdown ─────────────────────────────────────────────────────────
-function ProfileMenu({ onClose }: { onClose: () => void }) {
+
+function ProfileMenu({
+  onClose,
+  onSignOut,
+}: {
+  onClose: () => void
+  onSignOut: () => void
+}) {
   return (
     <div
       className="absolute right-0 top-10 z-50 w-44 py-1.5"
@@ -89,7 +131,7 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
       }}
       onMouseLeave={onClose}
     >
-      {['Account', 'Preferences', 'Sign out'].map((item) => (
+      {['Account', 'Preferences'].map((item) => (
         <button
           key={item}
           className="w-full text-left px-4 py-2 text-sm text-[#1a1a1a] hover:bg-black/5 transition-colors"
@@ -98,11 +140,20 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
           {item}
         </button>
       ))}
+
+      <button
+        onClick={onSignOut}
+        className="w-full text-left px-4 py-2 text-sm text-[#1a1a1a] hover:bg-black/5 transition-colors"
+        style={{ fontFamily: 'Questrial, sans-serif' }}
+      >
+        Sign out
+      </button>
     </div>
   )
 }
 
 // ── Sidebar ──────────────────────────────────────────────────────────────────
+
 function Sidebar({
   open,
   onToggle,
@@ -131,6 +182,7 @@ function Sidebar({
       <nav className="flex-1 flex flex-col gap-1 p-2 mt-1">
         {NAV_ITEMS.map((item) => {
           const active = current === item.id
+
           return (
             <button
               key={item.id}
@@ -138,7 +190,9 @@ function Sidebar({
               title={!open ? item.label : undefined}
               className="flex items-center gap-3 px-3 py-2.5 rounded-[14px] text-sm text-left"
               style={{
-                background: active ? 'rgba(26,26,26,0.08)' : 'transparent',
+                background: active
+                  ? 'rgba(26,26,26,0.08)'
+                  : 'transparent',
                 color: active ? '#1a1a1a' : '#666',
                 fontFamily: 'Questrial, sans-serif',
                 fontWeight: active ? 600 : 400,
@@ -148,9 +202,15 @@ function Sidebar({
                 overflow: 'hidden',
               }}
             >
-              <span className="flex-shrink-0" style={{ color: active ? '#1a1a1a' : '#888' }}>
+              <span
+                className="flex-shrink-0"
+                style={{
+                  color: active ? '#1a1a1a' : '#888',
+                }}
+              >
                 <NavIcon paths={item.paths} />
               </span>
+
               <span
                 style={{
                   opacity: open ? 1 : 0,
@@ -179,8 +239,20 @@ function Sidebar({
           flexShrink: 0,
         }}
       >
-        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
-          {open ? <path d="M15 18l-6-6 6-6" /> : <path d="M9 18l6-6-6-6" />}
+        <svg
+          width={14}
+          height={14}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+        >
+          {open ? (
+            <path d="M15 18l-6-6 6-6" />
+          ) : (
+            <path d="M9 18l6-6-6-6" />
+          )}
         </svg>
       </button>
     </aside>
@@ -188,8 +260,35 @@ function Sidebar({
 }
 
 // ── Header ───────────────────────────────────────────────────────────────────
-function Header({ navigate }: { navigate: (p: Page) => void }) {
+
+function Header({
+  navigate,
+  user,
+  onSignOut,
+}: {
+  navigate: (p: Page) => void
+  user: User
+  onSignOut: () => void
+}) {
   const [profileOpen, setProfileOpen] = useState(false)
+
+  const displayName =
+    user.user_metadata?.full_name ??
+    user.user_metadata?.name ??
+    user.email ??
+    'User'
+
+  const firstName = displayName.split(' ')[0]
+
+  const avatarUrl =
+    user.user_metadata?.avatar_url ||
+    user.user_metadata?.picture ||
+    null
+
+  const initials = displayName
+    .trim()
+    .charAt(0)
+    .toUpperCase()
 
   return (
     <header
@@ -198,7 +297,7 @@ function Header({ navigate }: { navigate: (p: Page) => void }) {
     >
       {/* Logo area */}
       <div className="flex items-center gap-3">
-        {/* Logo placeholder */}
+        {/* Logo */}
         <div
           className="flex items-center justify-center rounded-[10px]"
           style={{
@@ -207,13 +306,27 @@ function Header({ navigate }: { navigate: (p: Page) => void }) {
             background: '#1a1a1a',
           }}
         >
-          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round">
+          <svg
+            width={18}
+            height={18}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth={2}
+            strokeLinecap="round"
+          >
             <path d="M4 7h16M4 12h10M4 17h13" />
           </svg>
         </div>
+
         <div>
-          <div className="text-[15px] font-semibold text-[#1a1a1a] leading-none">ContextAPI</div>
-          <div className="text-[11px] text-[#888] mt-0.5">API Context Engine</div>
+          <div className="text-[15px] font-semibold text-[#1a1a1a] leading-none">
+            ContextAPI
+          </div>
+
+          <div className="text-[11px] text-[#888] mt-0.5">
+            API Context Engine
+          </div>
         </div>
       </div>
 
@@ -221,13 +334,32 @@ function Header({ navigate }: { navigate: (p: Page) => void }) {
       <div className="flex items-center gap-2">
         <button
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-[12px] text-[13px] text-[#555]"
-          style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(0,0,0,0.08)', cursor: 'pointer', fontFamily: 'Questrial, sans-serif' }}
+          style={{
+            background: 'rgba(255,255,255,0.6)',
+            border: '1px solid rgba(0,0,0,0.08)',
+            cursor: 'pointer',
+            fontFamily: 'Questrial, sans-serif',
+          }}
         >
-          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+          <svg
+            width={14}
+            height={14}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+          >
             <circle cx="12" cy="12" r="10" />
             <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
-            <circle cx="12" cy="17" r="0.5" fill="currentColor" />
+            <circle
+              cx="12"
+              cy="17"
+              r="0.5"
+              fill="currentColor"
+            />
           </svg>
+
           Help
         </button>
 
@@ -236,20 +368,77 @@ function Header({ navigate }: { navigate: (p: Page) => void }) {
           <button
             onClick={() => setProfileOpen((v) => !v)}
             className="flex items-center gap-2 px-2 py-1 rounded-[12px]"
-            style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(0,0,0,0.08)', cursor: 'pointer' }}
+            style={{
+              background: 'rgba(255,255,255,0.6)',
+              border: '1px solid rgba(0,0,0,0.08)',
+              cursor: 'pointer',
+            }}
           >
             <div
-              className="rounded-full flex items-center justify-center text-white text-[12px] font-semibold"
-              style={{ width: 28, height: 28, background: 'linear-gradient(135deg, #1a1a1a, #555)' }}
+              className="rounded-full flex items-center justify-center text-white text-[12px] font-semibold overflow-hidden"
+              style={{
+                width: 28,
+                height: 28,
+                background:
+                  'linear-gradient(135deg, #1a1a1a, #555)',
+              }}
             >
-              JD
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    const img = e.currentTarget
+
+                    img.style.display = 'none'
+
+                    const parent = img.parentElement
+
+                    if (parent) {
+                      parent.textContent = initials
+                    }
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  }}
+                />
+              ) : (
+                initials
+              )}
             </div>
-            <span className="text-[13px] text-[#333] pr-1" style={{ fontFamily: 'Questrial, sans-serif' }}>James</span>
-            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth={2} strokeLinecap="round">
+
+            <span
+              className="text-[13px] text-[#333] pr-1"
+              style={{
+                fontFamily: 'Questrial, sans-serif',
+              }}
+            >
+              {firstName}
+            </span>
+
+            <svg
+              width={12}
+              height={12}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#999"
+              strokeWidth={2}
+              strokeLinecap="round"
+            >
               <path d="M6 9l6 6 6-6" />
             </svg>
           </button>
-          {profileOpen && <ProfileMenu onClose={() => setProfileOpen(false)} />}
+
+          {profileOpen && (
+            <ProfileMenu
+              onClose={() => setProfileOpen(false)}
+              onSignOut={onSignOut}
+            />
+          )}
         </div>
       </div>
     </header>
@@ -257,58 +446,198 @@ function Header({ navigate }: { navigate: (p: Page) => void }) {
 }
 
 // ── Main App ─────────────────────────────────────────────────────────────────
+
 export default function App() {
+  const [session, setSession] = useState<{
+    user: User
+  } | null>(null)
+
+  const [authLoading, setAuthLoading] = useState(true)
+
   const [page, setPage] = useState<Page>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [pageData, setPageData] = useState<unknown>(null)
+
   const mainRef = useRef<HTMLDivElement>(null)
+
+  // ── Supabase authentication ───────────────────────────────────────────────
+
+  useEffect(() => {
+    let mounted = true
+
+    const loadSession = async () => {
+      const { data, error } = await supabase.auth.getSession()
+
+      if (error) {
+        console.error(
+          'Failed to load Supabase session:',
+          error,
+        )
+      }
+
+      if (mounted) {
+        setSession(data.session)
+        setAuthLoading(false)
+      }
+    }
+
+    loadSession()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (_event, nextSession) => {
+        if (mounted) {
+          setSession(nextSession)
+          setAuthLoading(false)
+        }
+      },
+    )
+
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  // ── Sign out ──────────────────────────────────────────────────────────────
+
+  const handleSignOut = async () => {
+    const { error } = await supabase.auth.signOut()
+
+    if (error) {
+      console.error('Sign out failed:', error)
+    }
+  }
+
+  // ── Authentication loading screen ─────────────────────────────────────────
+
+  if (authLoading) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          background: '#EFEFEF',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontFamily: 'Questrial, sans-serif',
+          color: '#777',
+          fontSize: '13px',
+        }}
+      >
+        Loading APICE…
+      </div>
+    )
+  }
+
+  // ── Login gate ────────────────────────────────────────────────────────────
+
+  if (!session) {
+    return <Login />
+  }
+
+  // ── Navigation ────────────────────────────────────────────────────────────
 
   const navigate = (p: Page, data?: unknown) => {
     setPage(p)
     setPageData(data ?? null)
-    // Reset scroll to top on every navigation without affecting sidebar
-    if (mainRef.current) mainRef.current.scrollTop = 0
+
+    // Reset scroll to top on every navigation
+    // without affecting sidebar.
+    if (mainRef.current) {
+      mainRef.current.scrollTop = 0
+    }
   }
 
   const sidebarW = sidebarOpen ? 220 : 64
-  // Left edge of main content: sidebar left(12) + sidebar width + gap(12)
+
+  // Left edge of main content:
+  // sidebar left(12) + sidebar width + gap(12)
   const mainLeft = 12 + sidebarW + 12
 
   const pageProps = { navigate }
 
   function renderPage() {
     switch (page) {
-      case 'dashboard':  return <Dashboard {...pageProps} />
-      case 'upload':     return <UploadSpec {...pageProps} />
-      case 'explorer':   return <APIExplorer {...pageProps} data={pageData} />
-      case 'endpoint':   return <EndpointDetails {...pageProps} data={pageData} />
-      case 'assistant':  return <AIAssistant {...pageProps} />
-      case 'debug':      return <DebugAssistant {...pageProps} />
-      case 'tests':      return <TestCases {...pageProps} />
-      case 'status':     return <SystemStatus {...pageProps} />
-      case 'settings':   return <Settings {...pageProps} />
-      default:           return <Dashboard {...pageProps} />
+      case 'dashboard':
+        return <Dashboard {...pageProps} />
+
+      case 'upload':
+        return <UploadSpec {...pageProps} />
+
+      case 'explorer':
+        return (
+          <APIExplorer
+            {...pageProps}
+            data={pageData}
+          />
+        )
+
+      case 'endpoint':
+        return (
+          <EndpointDetails
+            {...pageProps}
+            data={pageData}
+          />
+        )
+
+      case 'assistant':
+        return <AIAssistant {...pageProps} />
+
+      case 'debug':
+        return <DebugAssistant {...pageProps} />
+
+      case 'tests':
+        return <TestCases {...pageProps} />
+
+      case 'status':
+        return <SystemStatus {...pageProps} />
+
+      case 'settings':
+        return <Settings {...pageProps} />
+
+      default:
+        return <Dashboard {...pageProps} />
     }
   }
 
   return (
-    <div style={{ background: '#EFEFEF', height: '100vh', overflow: 'hidden' }}>
-      {/* Global header — always fixed, always same position */}
-      <Header navigate={navigate} />
+    <div
+      style={{
+        background: '#EFEFEF',
+        height: '100vh',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Global header — always fixed */}
+      <Header
+        navigate={navigate}
+        user={session.user}
+        onSignOut={handleSignOut}
+      />
 
-      {/* Global sidebar — always fixed, never moves */}
+      {/* Global sidebar — always fixed */}
       <Sidebar
         open={sidebarOpen}
-        onToggle={() => setSidebarOpen((v) => !v)}
+        onToggle={() =>
+          setSidebarOpen((v) => !v)
+        }
         current={page}
         navigate={navigate}
       />
 
       {/*
-        Main content: fixed so it never interacts with document scroll.
-        Has its own overflow-y: auto so only the content region scrolls.
+        Main content: fixed so it never interacts
+        with document scroll.
+
+        Has its own overflow-y: auto so only the
+        content region scrolls.
+
         scrollTop is reset to 0 on every navigate() call.
-        AI Assistant gets full height via height: 100% on its root div.
+
+        AI Assistant gets full height via height: 100%
+        on its root div.
       */}
       <main
         ref={mainRef}
@@ -320,17 +649,21 @@ export default function App() {
           bottom: 0,
           overflowY: 'auto',
           overflowX: 'hidden',
-          transition: 'left 280ms cubic-bezier(0.4,0,0.2,1)',
+          transition:
+            'left 280ms cubic-bezier(0.4,0,0.2,1)',
         }}
       >
-        {/* Centered content wrapper — shared by every page */}
+        {/* Centered content wrapper */}
         <div
           style={{
             width: '100%',
             maxWidth: 1100,
             margin: '0 auto',
             padding: '28px 32px 48px',
-            height: page === 'assistant' ? '100%' : undefined,
+            height:
+              page === 'assistant'
+                ? '100%'
+                : undefined,
             boxSizing: 'border-box',
           }}
         >

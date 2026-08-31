@@ -10,13 +10,14 @@ import {
   type ApiEndpoint,
 } from '../api/endpoints'
 import { generateTestCases } from '../api/testCases'
+import { incrementAIQueryCount } from '../utils/sessionMetrics'
 
 interface Props {
   navigate: (p: Page) => void
 }
 
 type TestStyle = 'jest' | 'pytest' | 'postman' | 'curl'
-type TestCategory = 'happy' | 'validation' | 'edge' | 'auth' | 'other'
+type TestCategory = 'happy' | 'validation' | 'edge' | 'auth' | 'errors'
 
 interface TestCase {
   id: string
@@ -49,8 +50,8 @@ const CATEGORY_META: Record<
     color: '#fee2e2',
     textColor: '#b91c1c',
   },
-  other: {
-    label: 'Other',
+  errors: {
+    label: 'Errors',
     color: '#f3f4f6',
     textColor: '#4b5563',
   },
@@ -65,6 +66,14 @@ function normalizeCategory(category: string): TestCategory {
     value.includes('success')
   ) {
     return 'happy'
+  }
+
+  if (
+    value.includes('error') ||
+    value.includes('failure') ||
+    value.includes('server')
+  ) {
+    return 'errors'
   }
 
   if (
@@ -90,7 +99,7 @@ function normalizeCategory(category: string): TestCategory {
     return 'auth'
   }
 
-  return 'other'
+  return 'errors'
 }
 
 function TestCaseRow({ tc }: { tc: TestCase }) {
@@ -225,7 +234,7 @@ export default function TestCases({ navigate }: Props) {
     'validation',
     'edge',
     'auth',
-    'other',
+    'errors',
   ])
 
   const [testCases, setTestCases] = useState<TestCase[]>([])
@@ -347,6 +356,8 @@ export default function TestCases({ navigate }: Props) {
         style,
         categories,
       )
+
+      incrementAIQueryCount()
 
       const mappedCases: TestCase[] =
         result.test_cases.map(

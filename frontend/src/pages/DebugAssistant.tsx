@@ -12,6 +12,7 @@ import {
   debugApiFailure,
   type DebugResponse,
 } from '../api/debug'
+import { incrementAIQueryCount } from '../utils/sessionMetrics'
 
 interface Props {
   navigate: (p: Page) => void
@@ -361,6 +362,8 @@ export default function DebugAssistant({ navigate }: Props) {
         request_body: requestBody,
         response_body: responseBody,
       })
+
+      incrementAIQueryCount()
 
       setResult(response)
     } catch (error) {

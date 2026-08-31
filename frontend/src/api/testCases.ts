@@ -11,7 +11,7 @@ export type TestCategory =
   | 'validation'
   | 'edge'
   | 'auth'
-  | 'other'
+  | 'errors'
 
 export interface GeneratedTestCase {
   category: string

@@ -8,6 +8,7 @@ import {
 } from '../api/specifications'
 import type { Page } from '../utils'
 import { CARD, INPUT_STYLE } from '../utils'
+import { incrementAIQueryCount } from '../utils/sessionMetrics'
 
 interface Props { navigate: (p: Page) => void }
 
@@ -60,9 +61,9 @@ function MessageBubble({ msg }: { msg: Message }) {
           </svg>
         </div>
       )}
-      <div className="max-w-[80%]">
+      <div className="max-w-[80%] min-w-0">
         <div
-          className="px-4 py-3 rounded-[16px] text-[14px] leading-relaxed"
+          className="px-4 py-3 rounded-[16px] text-[14px] leading-relaxed min-w-0 max-w-full"
           style={{
             background: isUser ? '#1a1a1a' : 'rgba(255,255,255,0.8)',
             color: isUser ? '#fff' : '#1a1a1a',
@@ -82,14 +83,30 @@ function MessageBubble({ msg }: { msg: Message }) {
               strong: ({ children }) => (
                 <strong className="font-semibold">{children}</strong>
               ),
-
-              code: ({ children }) => (
-                <code
-                  className="font-mono text-[12px] px-1.5 py-0.5 rounded"
+              pre: ({ children }) => (
+                <pre
+                  className="my-3 max-w-full overflow-x-auto rounded-[10px] p-3"
                   style={{
                     background: isUser
-                      ? 'rgba(255,255,255,0.15)'
-                      : 'rgba(0,0,0,0.06)',
+                      ? 'rgba(255,255,255,0.08)'
+                      : 'rgba(0,0,0,0.04)',
+                    border: isUser
+                      ? '1px solid rgba(255,255,255,0.12)'
+                      : '1px solid rgba(0,0,0,0.06)',
+                    whiteSpace: 'pre-wrap',
+                    overflowWrap: 'anywhere',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {children}
+                </pre>
+              ),
+              code: ({ children }) => (
+                <code
+                  className="font-mono text-[12px]"
+                  style={{
+                    overflowWrap: 'anywhere',
+                    wordBreak: 'break-word',
                   }}
                 >
                   {children}
@@ -242,6 +259,8 @@ export default function AIAssistant({ navigate }: Props) {
         q,
         selectedSpecificationId,
       )
+
+      incrementAIQueryCount()
 
       setMessages(prev => [
         ...prev,
