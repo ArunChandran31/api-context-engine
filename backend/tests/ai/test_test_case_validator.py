@@ -1,4 +1,5 @@
 import pytest
+
 from app.ai.test_case_models import (
     GeneratedTestCase,
     TestCaseGenerationResult,

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import pytest
+
 from app.database.models.api_specification import ApiSpecification
 from app.database.models.endpoint import Endpoint
 from app.rag.context_generator import ContextGenerator

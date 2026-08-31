@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from app.ai.dependencies import AIDependencies, build_ai_dependencies
 from app.ai.deterministic_provider import DeterministicLLMProvider
 from app.ai.fallback_provider import FallbackLLMProvider
@@ -66,7 +67,7 @@ def test_question_answering_service_uses_rag_retrieval_service() -> None:
             rag_dependencies=rag_dependencies,
         )
 
-        result = dependencies.question_answering_service.answer(
+        dependencies.question_answering_service.answer(
             "Which endpoint creates a user?",
             specification_id=3,
         )

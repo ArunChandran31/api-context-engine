@@ -1,4 +1,5 @@
 import pytest
+
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.in_memory_vector_store import InMemoryVectorStore
 from app.rag.retrieval_service import (

@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+from fastapi.testclient import TestClient
+
 from app.ai.dependencies import AIDependencies
 from app.ai.exceptions import LLMProviderError
 from app.ai.models import GenerationResult
@@ -9,7 +11,6 @@ from app.core.auth import AuthenticatedUser, get_current_user
 from app.database.models.api_specification import ApiSpecification
 from app.main import app
 from app.rag.retrieval_service import RetrievalResult
-from fastapi.testclient import TestClient
 
 TEST_USER = AuthenticatedUser(
     id="test-user-id",

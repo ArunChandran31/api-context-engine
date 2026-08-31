@@ -1,10 +1,11 @@
 import pytest
+from pydantic import ValidationError
+
 from app.ai.test_case_models import GeneratedTestCase
 from app.schemas.test_case import (
     TestCaseGenerationRequest,
     TestCaseGenerationResponse,
 )
-from pydantic import ValidationError
 
 
 def test_request_schema_accepts_question() -> None:

@@ -1,9 +1,10 @@
 import pytest
+from pydantic import ValidationError
+
 from app.schemas.debug import (
     DebugRequest,
     DebugResponse,
 )
-from pydantic import ValidationError
 
 
 def test_request_schema_accepts_question() -> None:

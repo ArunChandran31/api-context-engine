@@ -1,4 +1,5 @@
 import pytest
+
 from app.schemas.ai import QuestionRequest, QuestionResponse
 
 

@@ -1,10 +1,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from app.ai.exceptions import LLMProviderError
-from app.ai.groq_provider import GroqLLMProvider
-from app.ai.models import GenerationRequest, GenerationResult
-from app.ai.provider import LLMProvider
 from groq import (
     APIConnectionError,
     APITimeoutError,
@@ -12,6 +8,11 @@ from groq import (
     InternalServerError,
     RateLimitError,
 )
+
+from app.ai.exceptions import LLMProviderError
+from app.ai.groq_provider import GroqLLMProvider
+from app.ai.models import GenerationRequest, GenerationResult
+from app.ai.provider import LLMProvider
 
 
 def test_groq_provider_implements_llm_provider() -> None:

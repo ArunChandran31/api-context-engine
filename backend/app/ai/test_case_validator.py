@@ -631,14 +631,13 @@ class TestCaseGroundingValidator:
         ):
             return True
 
-        if re.search(
-            r"\b(?:returns?|responds?|responded|expects?|expected)"
-            r"(?:\s+with)?(?:\s+an?\s+http)?\s+404\b",
-            normalized_context,
-        ):
-            return True
-
-        return False
+        return bool(
+            re.search(
+                r"\b(?:returns?|responds?|responded|expects?|expected)"
+                r"(?:\s+with)?(?:\s+an?\s+http)?\s+404\b",
+                normalized_context,
+            )
+        )
 
     # ------------------------------------------------------------------
     # REQUEST VALUES

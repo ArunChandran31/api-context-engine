@@ -1,11 +1,12 @@
 from unittest.mock import MagicMock, patch
 
+from fastapi.testclient import TestClient
+
 from app.ai.debug_models import DebugResult
 from app.api.debug import get_ai_dependencies
 from app.core.auth import AuthenticatedUser, get_current_user
 from app.database.models.api_specification import ApiSpecification
 from app.main import app
-from fastapi.testclient import TestClient
 
 TEST_USER = AuthenticatedUser(
     id="test-user-id",

@@ -1,4 +1,5 @@
 import pytest
+
 from app.ai.models import GenerationRequest
 from app.ai.prompt_builder import GroundedPromptBuilder
 from app.rag.retrieval_service import RetrievalResult

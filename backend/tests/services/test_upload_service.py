@@ -1,14 +1,15 @@
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import create_engine, func, select
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
 from app.database.base import Base
 from app.database.models.api_specification import ApiSpecification
 from app.database.models.endpoint import Endpoint
 from app.rag.indexing_orchestrator import RAGIndexingOrchestrator
 from app.services.upload_service import UploadService
-from sqlalchemy import create_engine, func, select
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 
 TEST_DATABASE_URL = "sqlite://"
 

@@ -1,5 +1,6 @@
 import ast
 import re
+from typing import ClassVar
 
 from app.ai.test_case_models import (
     TestCaseGenerationResult,
@@ -18,7 +19,7 @@ class TestCaseArtifactValidator:
     for its selected implementation style.
     """
 
-    _HTTP_METHODS = {
+    _HTTP_METHODS: ClassVar[set[str]] = {
         "get",
         "post",
         "put",
@@ -158,9 +159,12 @@ class TestCaseArtifactValidator:
                     if isinstance(target, ast.Name):
                         assignments[target.id] = node.value
 
-            elif isinstance(node, ast.AnnAssign):
-                if isinstance(node.target, ast.Name) and node.value is not None:
-                    assignments[node.target.id] = node.value
+            elif (
+                isinstance(node, ast.AnnAssign)
+                and isinstance(node.target, ast.Name)
+                and node.value is not None
+            ):
+                assignments[node.target.id] = node.value
 
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):

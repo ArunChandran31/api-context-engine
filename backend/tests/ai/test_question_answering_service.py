@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+
 from app.ai.models import GenerationRequest, GenerationResult
 from app.ai.prompt_builder import GroundedPromptBuilder
 from app.ai.provider import LLMProvider

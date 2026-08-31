@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+
 from app.ai.test_case_artifact_validator import (
     TestCaseArtifactValidator,
 )

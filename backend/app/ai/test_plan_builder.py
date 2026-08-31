@@ -219,8 +219,10 @@ class TestPlanBuilder:
                     ),
                     grounded_facts=(
                         f"Field '{field}' is documented as required.",
-                        "Only explicitly required fields may be tested "
-                        "as missing required fields.",
+                        (
+                            "Only explicitly required fields may be tested "
+                            "as missing required fields."
+                        ),
                         "Concrete runtime values must not be invented.",
                     ),
                 )
@@ -256,12 +258,18 @@ class TestPlanBuilder:
                         f"constraints."
                     ),
                     grounded_facts=(
-                        f"Request-body field '{field}' is documented "
-                        f"as type '{field_type}'.",
-                        "Synthetic invalid values may be used only "
-                        "to intentionally violate the documented type.",
-                        "Path parameters must not be converted into "
-                        "request-body validation scenarios.",
+                        (
+                            f"Request-body field '{field}' is documented "
+                            f"as type '{field_type}'."
+                        ),
+                        (
+                            "Synthetic invalid values may be used only "
+                            "to intentionally violate the documented type."
+                        ),
+                        (
+                            "Path parameters must not be converted into "
+                            "request-body validation scenarios."
+                        ),
                     ),
                 )
             )
@@ -333,11 +341,16 @@ class TestPlanBuilder:
         security_facts: list[str] = [
             "Security requirements are documented.",
             "Only the documented authentication mechanism may be used.",
-            "Concrete token values are not API facts unless explicitly " "documented.",
+            (
+                "Concrete token values are not API facts unless explicitly "
+                "documented."
+            ),
             "Use a token placeholder when a concrete token is unavailable.",
             "Do not invent authentication response statuses.",
-            "Do not infer successful authentication behavior unless "
-            "a corresponding success response is documented.",
+            (
+                "Do not infer successful authentication behavior unless "
+                "a corresponding success response is documented."
+            ),
         ]
 
         return [

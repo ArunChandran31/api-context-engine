@@ -1,10 +1,11 @@
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
 from app.core.auth import AuthenticatedUser, get_current_user
 from app.database.models.api_specification import ApiSpecification
 from app.database.models.endpoint import Endpoint
 from app.database.session import get_db
 from app.main import app
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
 USER_A = AuthenticatedUser(
     id="user-a-id",
@@ -34,7 +35,7 @@ def get_test_db() -> Session:
     session = db()
 
     if not isinstance(session, Session):
-        raise RuntimeError("The get_db dependency override did not return a Session.")
+        raise TypeError("The get_db dependency override did not return a Session.")
 
     return session
 

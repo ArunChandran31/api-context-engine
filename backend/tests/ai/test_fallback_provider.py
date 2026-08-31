@@ -1,4 +1,5 @@
 import pytest
+
 from app.ai.exceptions import LLMProviderError
 from app.ai.fallback_provider import FallbackLLMProvider
 from app.ai.models import GenerationRequest, GenerationResult

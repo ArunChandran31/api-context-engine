@@ -26,7 +26,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(
+    credentials: HTTPAuthorizationCredentials | None = Depends(  # noqa: B008
         bearer_scheme,
     ),
 ) -> AuthenticatedUser:

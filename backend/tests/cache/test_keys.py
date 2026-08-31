@@ -17,7 +17,7 @@ def test_build_ai_question_cache_key_is_deterministic() -> None:
     )
 
     expected_hash = hashlib.sha256(
-        "What fields are required?".encode("utf-8"),
+        b"What fields are required?",
     ).hexdigest()
 
     assert key == (

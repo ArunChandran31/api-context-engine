@@ -1,5 +1,8 @@
 from unittest.mock import MagicMock
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
 from app.ai.dependencies import AIDependencies
 from app.ai.test_case_models import (
     GeneratedTestCase,
@@ -11,8 +14,6 @@ from app.api.test_cases import (
     specification_service,
 )
 from app.core.auth import AuthenticatedUser, get_current_user
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 TEST_USER = AuthenticatedUser(
     id="test-user-id",

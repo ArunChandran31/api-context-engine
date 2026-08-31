@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+
 from app.ai.debug_generator import DebugGenerator
 from app.ai.debug_models import DebugResult
 from app.ai.debug_prompt_builder import DebugPromptBuilder

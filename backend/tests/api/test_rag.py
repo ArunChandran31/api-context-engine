@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock
 
+from fastapi.testclient import TestClient
+
 from app.api.rag import get_rag_dependencies
 from app.cache.dependencies import get_cache_service
 from app.core.auth import AuthenticatedUser, get_current_user
@@ -16,7 +18,6 @@ from app.rag.indexing_service import RAGIndexingService
 from app.rag.persistence import VectorStorePersistence
 from app.rag.pipeline import RAGPipeline
 from app.rag.retrieval_service import RAGRetrievalService, RetrievalResult
-from fastapi.testclient import TestClient
 
 TEST_USER = AuthenticatedUser(
     id="test-user-id",

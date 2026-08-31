@@ -3,7 +3,6 @@ import logging
 from fastapi import APIRouter
 from sqlalchemy import text
 
-from app.ai.runtime import get_ai_dependencies
 from app.core.config import get_settings
 from app.core.redis import get_redis_client
 from app.database.session import SessionLocal
@@ -22,7 +21,7 @@ def _check_database() -> dict:
         return {
             "status": "healthy",
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning("Database health check failed: %s", exc)
         return {
             "status": "error",
@@ -40,7 +39,7 @@ def _check_redis() -> dict:
         return {
             "status": "healthy",
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning("Redis health check failed: %s", exc)
         return {
             "status": "degraded",
@@ -59,7 +58,7 @@ def _check_vector_store() -> dict:
             "records": len(store),
             "dimension": store.dimension,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning("Vector store health check failed: %s", exc)
         return {
             "status": "error",
