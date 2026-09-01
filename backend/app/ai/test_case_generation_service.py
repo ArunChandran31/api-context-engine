@@ -1,3 +1,6 @@
+import re
+from typing import ClassVar
+
 from app.ai.test_case_artifact_validator import TestCaseArtifactValidator
 from app.ai.test_case_generator import TestCaseGenerator
 from app.ai.test_case_models import (
@@ -29,12 +32,55 @@ class TestCaseGenerationService:
     Unsupported requested categories are returned explicitly as
     skipped_categories rather than being sent to the LLM.
 
-    If grounding or artifact validation fails, the service performs
-    one bounded regeneration attempt using the validation error as
-    correction feedback.
+    If grounding, artifact, or category-coverage validation fails,
+    the service performs one bounded regeneration attempt using the
+    validation error as correction feedback.
     """
 
     MAX_GENERATION_ATTEMPTS = 2
+
+    _CANONICAL_CATEGORIES: tuple[TestCategory, ...] = (
+        "happy",
+        "validation",
+        "edge",
+        "auth",
+        "errors",
+    )
+
+    _CATEGORY_ALIASES: ClassVar[dict[TestCategory, set[str]]] = {
+        "happy": {
+            "happy",
+            "happy path",
+            "positive",
+            "positive happy path",
+            "positive / happy path",
+        },
+        "validation": {
+            "validation",
+            "negative",
+            "negative validation",
+            "negative / validation",
+        },
+        "edge": {
+            "edge",
+            "edge case",
+        },
+        "auth": {
+            "auth",
+            "authentication",
+            "authorization",
+            "authentication authorization",
+            "authentication / authorization",
+        },
+        "errors": {
+            "error",
+            "errors",
+            "http error",
+            "http errors",
+            "documented http error",
+            "documented http errors",
+        },
+    }
 
     def __init__(
         self,
@@ -161,6 +207,11 @@ class TestCaseGenerationService:
                     test_style=test_style,
                 )
 
+                self._validate_category_coverage(
+                    result=validated_result,
+                    required_categories=supported_categories,
+                )
+
                 return self._attach_skipped_categories(
                     result=validated_result,
                     skipped_categories=skipped_categories,
@@ -202,51 +253,55 @@ class TestCaseGenerationService:
             skipped_categories=skipped_categories,
         )
 
-    @staticmethod
+    @classmethod
     def _build_supported_categories(
+        cls,
         categories: list[TestCategory] | None,
         test_plan: TestPlan,
-    ) -> list[TestCategory] | None:
+    ) -> list[TestCategory]:
         """
-        Return only categories that have at least one grounded
-        test-plan item.
+        Return categories that are supported by the grounded test plan.
 
-        Unsupported requested categories are handled separately by
-        skipped_categories and are never sent to the LLM.
+        When the caller does not explicitly select categories, use the
+        categories actually represented by the grounded plan instead of
+        asking the LLM to generate every possible category blindly.
         """
+
+        supported_plan_categories = {
+            item.category
+            for item in test_plan.items
+            if item.category in cls._CANONICAL_CATEGORIES
+        }
 
         if categories is None:
-            return None
+            return [
+                category
+                for category in cls._CANONICAL_CATEGORIES
+                if category in supported_plan_categories
+            ]
 
-        supported_plan_categories = {item.category for item in test_plan.items}
-
-        supported: list[TestCategory] = []
-
-        for category in categories:
-            if category in supported_plan_categories:
-                supported.append(category)
-
-        return list(dict.fromkeys(supported))
+        return list(
+            dict.fromkeys(
+                category
+                for category in categories
+                if category in supported_plan_categories
+            )
+        )
 
     @staticmethod
     def _build_skipped_categories(
         categories: list[TestCategory] | None,
-        supported_categories: list[TestCategory] | None,
+        supported_categories: list[TestCategory],
     ) -> list[SkippedTestCategory]:
         """
         Identify requested categories that are not supported by the
         grounded test plan.
-
-        The supported category list is passed directly from the same
-        calculation used to construct the LLM prompt. This guarantees
-        that categories reported as skipped are exactly the categories
-        excluded from generation.
         """
 
         if categories is None:
             return []
 
-        supported = set(supported_categories or [])
+        supported = set(supported_categories)
 
         reasons = {
             "happy": (
@@ -267,7 +322,7 @@ class TestCaseGenerationService:
                 "was found for this endpoint."
             ),
             "errors": (
-                "No documented HTTP error response was found for this " "endpoint."
+                "No documented HTTP error response was found for this endpoint."
             ),
         }
 
@@ -283,6 +338,100 @@ class TestCaseGenerationService:
                 )
 
         return skipped
+
+    @classmethod
+    def _canonicalize_category(
+        cls,
+        category: str,
+    ) -> TestCategory:
+        """
+        Normalize common LLM category labels to canonical API categories.
+        """
+
+        normalized = re.sub(
+            r"[^a-z0-9]+",
+            " ",
+            category.strip().lower(),
+        ).strip()
+
+        for canonical, aliases in cls._CATEGORY_ALIASES.items():
+            normalized_aliases = {
+                re.sub(
+                    r"[^a-z0-9]+",
+                    " ",
+                    alias.strip().lower(),
+                ).strip()
+                for alias in aliases
+            }
+
+            if normalized in normalized_aliases:
+                return canonical
+
+        raise ValueError(
+            "Generated test case contains an unsupported category: "
+            f"{category.strip()}.",
+        )
+
+    @classmethod
+    def _validate_category_coverage(
+        cls,
+        result: TestCaseGenerationResult,
+        required_categories: list[TestCategory],
+    ) -> None:
+        """
+        Ensure the LLM returned at least one test case for every
+        grounded-supported category requested for this generation.
+
+        Also reject categories that were not part of the grounded request.
+        """
+
+        if not required_categories:
+            return
+
+        required = set(required_categories)
+        generated: set[TestCategory] = set()
+        unexpected: list[str] = []
+
+        for test_case in result.test_cases:
+            try:
+                canonical = cls._canonicalize_category(
+                    test_case.category,
+                )
+            except ValueError:
+                unexpected.append(
+                    test_case.category.strip(),
+                )
+                continue
+
+            if canonical not in required:
+                unexpected.append(
+                    test_case.category.strip(),
+                )
+                continue
+
+            generated.add(canonical)
+
+        if unexpected:
+            unexpected_text = ", ".join(
+                dict.fromkeys(unexpected),
+            )
+
+            raise ValueError(
+                "Generated test cases contain unsupported generated "
+                f"categories: {unexpected_text}.",
+            )
+
+        missing = [
+            category for category in required_categories if category not in generated
+        ]
+
+        if missing:
+            missing_text = ", ".join(missing)
+
+            raise ValueError(
+                "Generated test cases are missing requested categories: "
+                f"{missing_text}.",
+            )
 
     @staticmethod
     def _build_regeneration_request(
@@ -306,7 +455,24 @@ class TestCaseGenerationService:
             "headers, authentication requirements, or response properties.\n"
         )
 
-        if "invalid Python syntax" in error_message:
+        if (
+            "missing requested categories" in error_message
+            or "unsupported generated categories" in error_message
+        ):
+            artifact_feedback += (
+                "\nCATEGORY COVERAGE REQUIREMENTS:\n"
+                "- Every requested and grounded-supported category MUST "
+                "have at least one generated test case.\n"
+                "- Do not omit a requested supported category.\n"
+                "- Do not generate categories that were not requested "
+                "or grounded as supported.\n"
+                "- Use canonical category values in the JSON response: "
+                "`happy`, `validation`, `edge`, `auth`, or `errors`.\n"
+                "- Generate a distinct scenario for each category rather "
+                "than collapsing multiple categories into one test.\n"
+            )
+
+        elif "invalid Python syntax" in error_message:
             artifact_feedback += (
                 "\nPYTHON SYNTAX REQUIREMENTS:\n"
                 "- Return syntactically valid Python.\n"

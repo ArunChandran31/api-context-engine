@@ -104,7 +104,7 @@ def test_generate_retrieves_context_and_generates_test_cases() -> None:
         endpoint="POST /users",
         contexts=contexts,
         test_style="jest",
-        categories=None,
+        categories=["happy"],
         test_plan=test_plan,
     )
 
@@ -829,3 +829,283 @@ def test_generate_retries_when_artifact_assertion_validation_fails() -> None:
         in second_request.prompt
     )
     assert "assert True" in second_request.prompt
+
+
+def test_generate_requires_coverage_for_all_supported_categories() -> None:
+    retrieval_service = MagicMock(spec=RAGRetrievalService)
+    prompt_builder = MagicMock(spec=TestCasePromptBuilder)
+    generator = MagicMock(spec=TestCaseGenerator)
+    validator = MagicMock()
+    artifact_validator = MagicMock(spec=TestCaseArtifactValidator)
+    test_plan_builder = MagicMock(spec=TestPlanBuilder)
+
+    contexts = [
+        RetrievalResult(
+            content=(
+                "Endpoint: POST /products/{product_id}\n"
+                "HTTP 200 is documented.\n"
+                "Security: bearerAuth\n"
+                "HTTP 400 is documented.\n"
+                "HTTP 404 is documented."
+            ),
+            score=0.95,
+            metadata={},
+        )
+    ]
+
+    request = TestCaseGenerationRequest(
+        prompt="Original prompt",
+    )
+
+    test_plan = TestPlan(
+        endpoint="POST /products/{product_id}",
+        items=[
+            TestPlanItem(
+                category="happy",
+                description="Successful replacement.",
+                grounded_facts=("HTTP 200 is documented.",),
+            ),
+            TestPlanItem(
+                category="validation",
+                description="Validate request fields.",
+                grounded_facts=("Request fields are documented.",),
+            ),
+            TestPlanItem(
+                category="edge",
+                description="Test a documented edge constraint.",
+                grounded_facts=("Edge constraint is documented.",),
+            ),
+            TestPlanItem(
+                category="auth",
+                description="Use documented authentication.",
+                grounded_facts=("Security is documented.",),
+            ),
+            TestPlanItem(
+                category="errors",
+                description="Test documented errors.",
+                grounded_facts=("HTTP 400 and 404 are documented.",),
+            ),
+        ],
+    )
+
+    first_result = TestCaseGenerationResult(
+        test_cases=[
+            GeneratedTestCase(
+                category="happy",
+                description="test('happy', () => { expect(true).toBe(true); });",
+            ),
+            GeneratedTestCase(
+                category="validation",
+                description="test('validation', () => { expect(true).toBe(true); });",
+            ),
+            GeneratedTestCase(
+                category="auth",
+                description="test('auth', () => { expect(true).toBe(true); });",
+            ),
+            GeneratedTestCase(
+                category="errors",
+                description="test('errors', () => { expect(true).toBe(true); });",
+            ),
+        ]
+    )
+
+    second_result = TestCaseGenerationResult(
+        test_cases=[
+            GeneratedTestCase(
+                category="happy",
+                description="test('happy', () => { expect(true).toBe(true); });",
+            ),
+            GeneratedTestCase(
+                category="validation",
+                description="test('validation', () => { expect(true).toBe(true); });",
+            ),
+            GeneratedTestCase(
+                category="edge",
+                description="test('edge', () => { expect(true).toBe(true); });",
+            ),
+            GeneratedTestCase(
+                category="auth",
+                description="test('auth', () => { expect(true).toBe(true); });",
+            ),
+            GeneratedTestCase(
+                category="errors",
+                description="test('errors', () => { expect(true).toBe(true); });",
+            ),
+        ]
+    )
+
+    retrieval_service.retrieve.return_value = contexts
+    test_plan_builder.build.return_value = test_plan
+    prompt_builder.build.return_value = request
+
+    generator.generate.side_effect = [
+        first_result,
+        second_result,
+    ]
+    validator.validate.side_effect = [
+        first_result,
+        second_result,
+    ]
+    artifact_validator.validate.side_effect = [
+        first_result,
+        second_result,
+    ]
+
+    service = TestCaseGenerationService(
+        retrieval_service=retrieval_service,
+        prompt_builder=prompt_builder,
+        generator=generator,
+        validator=validator,
+        artifact_validator=artifact_validator,
+        test_plan_builder=test_plan_builder,
+    )
+
+    result = service.generate(
+        endpoint="POST /products/{product_id}",
+        specification_id=6,
+        categories=["happy", "validation", "edge", "auth", "errors"],
+    )
+
+    assert result == second_result
+    assert generator.generate.call_count == 2
+    assert validator.validate.call_count == 2
+    assert artifact_validator.validate.call_count == 2
+
+    second_request = generator.generate.call_args_list[1].args[0]
+
+    assert "CATEGORY COVERAGE REQUIREMENTS:" in second_request.prompt
+    assert "Every requested and grounded-supported category" in (second_request.prompt)
+
+
+def test_generate_accepts_common_llm_category_aliases() -> None:
+    retrieval_service = MagicMock(spec=RAGRetrievalService)
+    prompt_builder = MagicMock(spec=TestCasePromptBuilder)
+    generator = MagicMock(spec=TestCaseGenerator)
+    validator = MagicMock()
+    artifact_validator = MagicMock(spec=TestCaseArtifactValidator)
+    test_plan_builder = MagicMock(spec=TestPlanBuilder)
+
+    contexts = [
+        RetrievalResult(
+            content="Endpoint: POST /users\nHTTP 200 is documented.",
+            score=0.95,
+            metadata={},
+        )
+    ]
+
+    request = TestCaseGenerationRequest(
+        prompt="Original prompt",
+    )
+
+    test_plan = TestPlan(
+        endpoint="POST /users",
+        items=[
+            TestPlanItem(
+                category="happy",
+                description="Successful request.",
+                grounded_facts=("HTTP 200 is documented.",),
+            ),
+        ],
+    )
+
+    result = TestCaseGenerationResult(
+        test_cases=[
+            GeneratedTestCase(
+                category="Positive / Happy path",
+                description=(
+                    "test('valid request', () => { " "expect(true).toBe(true); " "});"
+                ),
+            )
+        ]
+    )
+
+    retrieval_service.retrieve.return_value = contexts
+    test_plan_builder.build.return_value = test_plan
+    prompt_builder.build.return_value = request
+    generator.generate.return_value = result
+    validator.validate.return_value = result
+    artifact_validator.validate.return_value = result
+
+    service = TestCaseGenerationService(
+        retrieval_service=retrieval_service,
+        prompt_builder=prompt_builder,
+        generator=generator,
+        validator=validator,
+        artifact_validator=artifact_validator,
+        test_plan_builder=test_plan_builder,
+    )
+
+    generated = service.generate(
+        endpoint="POST /users",
+        specification_id=3,
+        categories=["happy"],
+    )
+
+    assert generated == result
+    generator.generate.assert_called_once()
+
+
+def test_generate_uses_grounded_categories_when_categories_are_not_explicit() -> None:
+    retrieval_service = MagicMock(spec=RAGRetrievalService)
+    prompt_builder = MagicMock(spec=TestCasePromptBuilder)
+    generator = MagicMock(spec=TestCaseGenerator)
+    test_plan_builder = MagicMock(spec=TestPlanBuilder)
+
+    contexts = [
+        RetrievalResult(
+            content="Endpoint: POST /users",
+            score=0.95,
+            metadata={},
+        )
+    ]
+
+    request = TestCaseGenerationRequest(
+        prompt="Prompt",
+    )
+
+    test_plan = TestPlan(
+        endpoint="POST /users",
+        items=[
+            TestPlanItem(
+                category="happy",
+                description="Generate a successful request.",
+                grounded_facts=("HTTP 200 is documented.",),
+            ),
+        ],
+    )
+
+    result = TestCaseGenerationResult(
+        test_cases=[
+            GeneratedTestCase(
+                category="happy",
+                description=(
+                    "test('valid request', () => { " "expect(true).toBe(true); " "});"
+                ),
+            )
+        ]
+    )
+
+    retrieval_service.retrieve.return_value = contexts
+    test_plan_builder.build.return_value = test_plan
+    prompt_builder.build.return_value = request
+    generator.generate.return_value = result
+
+    service = TestCaseGenerationService(
+        retrieval_service=retrieval_service,
+        prompt_builder=prompt_builder,
+        generator=generator,
+        test_plan_builder=test_plan_builder,
+    )
+
+    service.generate(
+        endpoint="POST /users",
+        specification_id=3,
+    )
+
+    prompt_builder.build.assert_called_once_with(
+        endpoint="POST /users",
+        contexts=contexts,
+        test_style="jest",
+        categories=["happy"],
+        test_plan=test_plan,
+    )

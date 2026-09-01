@@ -39,13 +39,17 @@ class TestCasePromptBuilder:
                 "Do not assume or invent any API behavior."
             )
 
-        selected_categories = categories or [
-            "happy",
-            "validation",
-            "edge",
-            "auth",
-            "errors",
-        ]
+        selected_categories = (
+            categories
+            if categories is not None
+            else [
+                "happy",
+                "validation",
+                "edge",
+                "auth",
+                "errors",
+            ]
+        )
 
         category_labels = {
             "happy": "Positive / Happy path",
@@ -164,6 +168,17 @@ class TestCasePromptBuilder:
             "supported by the API Context.\n"
             "11. Do not convert general API testing knowledge into "
             "API-specific facts.\n\n"
+            "CATEGORY COVERAGE RULES:\n"
+            "12. Generate at least one test case for every requested "
+            "category that appears in the supplied Grounded Test Plan.\n"
+            "13. Do not omit a requested supported category merely because "
+            "another category has more obvious scenarios.\n"
+            "14. Do not generate test cases for categories that are not "
+            "requested or not supported by the Grounded Test Plan.\n"
+            "15. Use exactly one of these canonical category values in the "
+            "JSON category field: happy, validation, edge, auth, errors.\n"
+            "16. Each generated category must contain a scenario appropriate "
+            "to that category rather than reusing an unrelated scenario.\n\n"
             "RESPONSE-BODY GROUNDING RULES:\n"
             "12. A documented HTTP response description is NOT a "
             "response schema.\n"
@@ -380,6 +395,21 @@ class TestCasePromptBuilder:
             "- Do NOT add fields other than category and description "
             "inside each test case.\n"
             "- Do not explain your reasoning outside the JSON object.\n\n"
+            "CATEGORY OUTPUT RULES:\n"
+            "- The category field MUST use only these canonical values: "
+            "`happy`, `validation`, `edge`, `auth`, or `errors`.\n"
+            "- Do not use display labels such as `Positive / Happy path`, "
+            "`Negative / Validation`, `Edge case`, "
+            "`Authentication / Authorization`, or "
+            "`Documented HTTP Errors` in the category field.\n"
+            "- Every requested and grounded-supported category MUST appear "
+            "at least once in the generated test_cases array.\n\n"
+            "ARTIFACT OUTPUT RULES:\n"
+            "- The description field must contain only the requested "
+            "test implementation, request, command, assertion, or concise "
+            "limitation.\n"
+            "- Do not prefix the description with a test-case title, "
+            "category heading, Markdown fence, or explanatory prose.\n\n"
             "Each generated test case's description must contain the "
             "actual test implementation, request, command, assertions, "
             "or limitation appropriate for the selected style.\n\n"
