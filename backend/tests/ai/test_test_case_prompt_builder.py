@@ -212,12 +212,73 @@ def test_build_includes_authentication_specific_grounding_rules() -> None:
 
     prompt = request.prompt
 
-    assert "Security schemes in the API Context are metadata" in prompt
-    assert "are NOT automatically documented request headers" in prompt
-    assert "A security scheme such as bearerAuth does NOT by itself" in prompt
-    assert "Only generate a request header when that header is explicitly" in prompt
+    assert "Security schemes in the API Context describe authentication" in prompt
+    assert "documented security requirements" in prompt
+    assert (
+        "non-authentication categories such as happy, validation, edge, and errors"
+        in prompt
+    )
+    assert "Authorization header" in prompt
+    assert "Bearer" in prompt
+    assert "'<token>'" in prompt
     assert "Never invent concrete authentication credentials" in prompt
     assert "Never invent authentication behavior" in prompt
+
+
+def test_build_requires_documented_auth_for_secured_non_auth_categories() -> None:
+    builder = TestCasePromptBuilder()
+
+    request = builder.build(
+        endpoint="POST /products/{product_id}",
+        contexts=[
+            RetrievalResult(
+                content=(
+                    "Endpoint: POST /products/{product_id}\n"
+                    "HTTP 200 is documented.\n"
+                    "Security: bearerAuth\n"
+                    "Request Body: name, price, in_stock"
+                ),
+                score=0.95,
+                metadata={},
+            )
+        ],
+        categories=["happy"],
+    )
+
+    prompt = request.prompt
+
+    assert (
+        "non-authentication categories such as happy, validation, edge, and errors "
+        "MUST include the documented authentication mechanism"
+    ) in prompt
+    assert ("For bearer authentication, generate the Authorization header") in prompt
+    assert "'<token>'" in prompt
+
+
+def test_build_does_not_invent_authentication_for_unsecured_endpoint() -> None:
+    builder = TestCasePromptBuilder()
+
+    request = builder.build(
+        endpoint="POST /products/{product_id}",
+        contexts=[
+            RetrievalResult(
+                content=(
+                    "Endpoint: POST /products/{product_id}\n"
+                    "HTTP 200 is documented.\n"
+                    "No security requirement is documented."
+                ),
+                score=0.95,
+                metadata={},
+            )
+        ],
+        categories=["happy"],
+    )
+
+    prompt = request.prompt
+
+    assert "If an endpoint is NOT documented as requiring authentication" in prompt
+    assert "do not invent Authorization headers" in prompt
+    assert "bearer tokens" in prompt
 
 
 def test_build_includes_response_body_grounding_rules() -> None:
